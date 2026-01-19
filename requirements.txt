@@ -8,4 +8,4 @@ openai
 python-upwork
 python-dotenv
 requests
-sqlalchemy\npsycopg2-binary\nrequests\npython-dotenv
+
