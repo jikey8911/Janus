@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import List, Optional
+from datetime import datetime
 from pymongo import MongoClient, ReturnDocument
-from domain.ports import JobRepository, ProposalRepository
+from domain.ports import JobRepository, ProposalRepository, EventCheckpointRepository
 from domain.entities import JobOffer, Proposal
 
 class MongoJobRepository(JobRepository):
@@ -79,6 +80,25 @@ class MongoProposalRepository(ProposalRepository):
             
             self.collection.insert_one(data)
             return self._map(data)
+
+class MongoEventCheckpointRepository(EventCheckpointRepository):
+    def __init__(self, db_url: str = "mongodb://localhost:27017/", db_name: str = "janus_db"):
+        self.client = MongoClient(db_url)
+        self.db = self.client[db_name]
+        self.collection = self.db["checkpoints"]
+
+    def get_last_processed_id(self, source: str) -> str:
+        doc = self.collection.find_one({"_id": source})
+        if doc:
+            return doc.get("last_event_id")
+        return ""
+
+    def update_last_processed_id(self, source: str, event_id: str):
+        self.collection.update_one(
+            {"_id": source},
+            {"$set": {"last_event_id": event_id, "updated_at": datetime.utcnow()}},
+            upsert=True
+        )
 
     def _map(self, doc) -> Proposal:
         doc_data = {k: v for k, v in doc.items() if k != "_id"}

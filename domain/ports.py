@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Union
 from .entities import JobOffer, Proposal, ClientMessage
 
 class JobRepository(ABC):
@@ -16,7 +16,7 @@ class ProposalRepository(ABC):
     def save(self, proposal: Proposal) -> Proposal:
         pass
 
-class UpworkPort(ABC):
+class FreelancePlatformPort(ABC):
     @abstractmethod
     def search_jobs(self, query: str) -> List[JobOffer]:
         pass
@@ -44,5 +44,20 @@ class NotificationPort(ABC):
         pass
 
     @abstractmethod
-    def notify_message(self, message: ClientMessage) -> bool:
+    def notify_message(self, message: Union[ClientMessage, str]) -> bool:
+        pass
+
+class EventCheckpointRepository(ABC):
+    @abstractmethod
+    def get_last_processed_id(self, source: str) -> str:
+        """
+        Retrieves the last processed event ID for a given source.
+        """
+        pass
+
+    @abstractmethod
+    def update_last_processed_id(self, source: str, event_id: str):
+        """
+        Updates the checkpoint for a source.
+        """
         pass

@@ -1,46 +1,48 @@
-# Resumen del Funcionamiento de Project Janus (Paso a Paso)
+# Plan de Implementación: Project Janus (V2.0 - Arquitectura Hexagonal)
 
-Project Janus automatiza la búsqueda y aplicación a trabajos en Upwork utilizando una **Arquitectura Hexagonal**. El flujo se divide en capas:
+## Visión del Proyecto
+Refactorizar y expandir "Project Janus" para automatizar no solo la captación, sino también la producción y entrega de servicios freelance mediante el **Protocolo Universal de Desarrollo (Método Científico)** y el uso coordinado de herramientas de IA.
 
-## Flujo Principal: Buscar y Analizar (Ya Implementado - HU 2.1)
+## Épicas (Capas de la Arquitectura Hexagonal)
 
-1.  **Inicio (Trigger)**
-    *   El caso de uso `ScanAndAnalyzeJobsUseCase` es invocado (manualmente o por cronjob).
-    *   Recibe una consulta de búsqueda (ej. `query="(python OR ai)"`).
-
-2.  **Búsqueda (Puerto de Salida: Upwork)**
-    *   El sistema llama a `UpworkPort.search_jobs(query)`.
-    *   **Acción:** Se conecta a la API de Upwork y obtiene las ofertas recientes.
-
-3.  **Filtrado y Persistencia (Puerto de Salida: Base de Datos)**
-    *   Por cada oferta, el sistema consulta `JobRepository.get_by_upwork_id()`.
-    *   **Acción:**
-        *   Si existe: Se ignora (evita duplicados).
-        *   Si es nueva: Se guarda en la base de datos (`JobRepository.save(job)`).
-
-4.  **Análisis con IA (Puerto de Salida: IA)**
-    *   Las ofertas nuevas se envían a `AIServicePort.analyze_job(job)`.
-    *   **Acción:** La IA (OpenAI/Gemini) evalúa la descripción, presupuesto y cliente para determinar la viabilidad.
-    *   **Resultado:** Se genera un análisis (score, pros/contras).
-
-5.  **Notificación (Puerto de Salida: Notificaciones)**
-    *   Si la oferta es viable, se llama a `NotificationPort.notify_opportunity(job, analysis)`.
-    *   **Acción:** Envía un mensaje a Telegram con los detalles y el análisis de la IA.
+| Épica | Nombre | Descripción |
+| :--- | :--- | :--- |
+| **E1** | **Dominio y Puertos** | Núcleo inmutable: Entidades, lógica de negocio y definiciones de interfaces. |
+| **E2** | **Aplicación e Interacción** | Casos de uso: Orquestación del Radar, Generación de Propuestas y Protocolos de Ejecución. |
+| **E3** | **Infraestructura (Salida)** | Adaptadores: Upwork, Freelancer, Telegram, OpenAI/Gemini, ElevenLabs, Canva. |
+| **E4** | **Adaptadores de Entrada** | Escucha activa: Webhooks de Telegram y Monitoreo (Polling) de Upwork/Freelancer. |
 
 ---
 
-## Flujo Secundario: Generar y Enviar Propuesta (En Desarrollo - HU 2.2)
+## Sprints y Tareas Detalladas
 
-1.  **Solicitud de Propuesta**
-    *   Se inicia el caso de uso `GenerateProposalUseCase`.
-    *   Toma una oferta existente (`JobOffer`).
+### Sprint 1: Capa de Dominio y Puertos (Finalizado/Refinamiento)
+* **HU 1.1:** Definir Entidades de Dominio (`JobOffer`, `Proposal`, `ClientMessage`).
+* **HU 1.2:** Definir Puertos de Salida de Persistencia (`JobRepository`, `ProposalRepository`).
+* **HU 1.3:** Definir Puertos de Salida de Servicios (`FreelancePort`, `AIServicePort`, `NotificationPort`).
 
-2.  **Generación de Contenido (Puerto de Salida: IA)**
-    *   Se llama a `AIServicePort.generate_proposal_content(job)`.
-    *   **Acción:** La IA redacta una "Cover Letter" personalizada basada en la descripción del trabajo y el perfil del usuario.
-    *   **Resultado:** Un borrador de propuesta (`Proposal` con status `draft`).
+### Sprint 2: Casos de Uso de Captación y Notificación
+* **HU 2.1:** Caso de Uso `ScanAndAnalyzeJobs`: Orquestación Radar -> IA -> Notificación.
+* **HU 2.2:** Caso de Uso `GenerateProposal`: Generar Cover Letter personalizada con IA.
+* **HU 2.3:** Integrar con Celery para ejecución en segundo plano cada 30 min.
 
-3.  **Revisión y Envío (Puerto de Salida: Upwork)**
-    *   El usuario revisa el borrador (paso manual/intermedio).
-    *   Al aprobar, `SubmitProposalUseCase` llama a `UpworkPort.submit_proposal()`.
-    *   **Acción:** Se envía la propuesta oficialmente a Upwork.
+### Sprint 3: Infraestructura y Adaptadores de Salida
+* **HU 3.1:** Adaptadores de DB (PostgreSQL y MongoDB).
+* **HU 3.2:** Adaptadores de Plataforma (Upwork y **Freelancer.com**).
+* **HU 3.3:** Adaptador de IA (Estandarizar OpenAI/Gemini bajo `AIServicePort`).
+* **HU 3.4:** Adaptador de Notificación (Telegram Bot API).
+
+### Sprint 4: Adaptadores de Entrada y Gestión de Mensajes (NUEVO)
+* **HU 4.1:** **Inbound Port:** Implementar receptor de mensajes de Upwork/Freelancer (Nuevos mensajes, contratos ganados).
+* **HU 4.2:** **Relay de Mensajes:** Si llega un mensaje del cliente, enviarlo a Telegram.
+* **HU 4.3:** **Puerto de Entrada Telegram:** Webhook para responder mensajes de clientes desde Telegram.
+
+### Sprint 5: Protocolo Universal de Desarrollo (Ejecución Científica) (NUEVO)
+* **HU 5.1:** **Fase I y II (Observación e Hipótesis):** Automatizar investigación con Perplexity AI y generación de Blueprint del proyecto.
+* **HU 5.2:** **Categorizador de Trabajo:** Caso de uso que decide qué herramientas usar según el tipo de trabajo (Contenido, Video, Diseño).
+* **HU 5.3:** **Fase IV y V (Testing y Feedback):** Implementar flujo de envío de borradores al cliente y captura de feedback.
+
+### Sprint 6: Producción Multimedia y Cierre (NUEVO)
+* **HU 6.1:** **Adaptador Multimedia (Texto/Imagen):** Integrar ChatGPT + Canva AI/Microsoft Designer.
+* **HU 6.2:** **Adaptador Multimedia (Video/Audio):** Integrar ElevenLabs + CapCut/Pictory.
+* **HU 6.3:** **Fase VI (Conclusión):** Generación automática de reportes de entrega y cierre de hito en plataforma.

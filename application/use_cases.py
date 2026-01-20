@@ -1,17 +1,17 @@
 import logging
 from typing import Optional
-from domain.ports import JobRepository, ProposalRepository, UpworkPort, AIServicePort, NotificationPort
+from domain.ports import JobRepository, ProposalRepository, FreelancePlatformPort, AIServicePort, NotificationPort
 from domain.entities import JobOffer, Proposal
 
 class ScanAndAnalyzeJobsUseCase:
     def __init__(
-        self, 
-        upwork_port: UpworkPort, 
-        job_repo: JobRepository, 
-        ai_port: AIServicePort, 
+        self,
+        platform_port: FreelancePlatformPort,
+        job_repo: JobRepository,
+        ai_port: AIServicePort,
         notification_port: NotificationPort
     ):
-        self.upwork_port = upwork_port
+        self.platform_port = platform_port
         self.job_repo = job_repo
         self.ai_port = ai_port
         self.notification_port = notification_port
@@ -19,10 +19,10 @@ class ScanAndAnalyzeJobsUseCase:
     def execute(self, query: str = "(python OR automation OR ai)"):
         logging.info(f"Iniciando búsqueda de trabajos con query: '{query}'")
         try:
-            jobs = self.upwork_port.search_jobs(query)
-            logging.info(f"Se encontraron {len(jobs)} ofertas en Upwork.")
+            jobs = self.platform_port.search_jobs(query)
+            logging.info(f"Se encontraron {len(jobs)} ofertas en plataforma.")
         except Exception as e:
-            logging.error(f"Error buscando trabajos en Upwork: {e}")
+            logging.error(f"Error buscando trabajos en plataforma: {e}")
             return
 
         for job in jobs:
@@ -79,7 +79,9 @@ class GenerateProposalUseCase:
             logging.info(f"Propuesta generada y guardada: {saved_proposal.id}")
             
             self.notification_port.notify_message(
-                f"Propuesta generada (ID: {saved_proposal.id}) para oferta {job_upwork_id}"
+                f"📝 **Propuesta Generada** (ID: {saved_proposal.id})\n\n"
+                f"{saved_proposal.content}\n\n"
+                f"👇 **Aprobar:**\n`/approve {saved_proposal.id}`"
             )
             
             return saved_proposal

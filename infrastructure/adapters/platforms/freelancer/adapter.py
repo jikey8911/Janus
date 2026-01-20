@@ -1,12 +1,12 @@
 import logging
 from typing import List
-from domain.ports import UpworkPort # En el futuro deberíamos renombrar este puerto a JobBoardPort
+from domain.ports import FreelancePlatformPort # Renombrado de UpworkPort
 from domain.entities import JobOffer
 
-class FreelancerAdapter(UpworkPort):
+class FreelancerAdapter(FreelancePlatformPort):
     """
     Adaptador para la plataforma Freelancer.com (o similar).
-    Implementa la interfaz UpworkPort para ser intercambiable.
+    Implementa la interfaz FreelancePlatformPort para ser intercambiable.
     """
     def __init__(self):
         # Aquí se cargarían credenciales específicas de Freelancer si fueran necesarias.

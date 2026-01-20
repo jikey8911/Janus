@@ -1,53 +1,76 @@
-# Plan de Implementación: Project Janus (Arquitectura Hexagonal)
+# Plan de Implementación: Project Janus (V2.1 - Arquitectura Hexagonal)
 
 ## Visión del Proyecto
-Refactorizar "Project Janus" a una Arquitectura Hexagonal (Puertos y Adaptadores) para lograr independencia de la tecnología, facilitar el testing y permitir la escalabilidad al desacoplar la lógica de negocio de la infraestructura (Upwork, Telegram, Base de Datos, IA).
+Refactorizar y expandir "Project Janus" para automatizar no solo la captación, sino también la producción y entrega de servicios freelance mediante el **Protocolo Universal de Desarrollo (Método Científico)** y el uso coordinado de herramientas de IA.
 
 ## Épicas (Capas de la Arquitectura Hexagonal)
 
 | Épica | Nombre | Descripción |
 | :--- | :--- | :--- |
-| **E1** | **Dominio y Puertos** | Define las entidades de negocio (JobOffer, Proposal) y los contratos (Puertos) que la aplicación usará para interactuar con el mundo exterior. |
-| **E2** | **Aplicación y Casos de Uso** | Contiene la lógica de negocio central (Casos de Uso) que orquesta el flujo de trabajo (Buscar, Analizar, Proponer). |
-| **E3** | **Infraestructura y Adaptadores** | Implementa los Puertos definidos en E1. Contiene los adaptadores concretos para la Base de Datos, Upwork, Telegram e IA. |
-| **E4** | **Integración y Despliegue** | Conecta los adaptadores a la capa de aplicación (inyección de dependencias) y configura el entorno de producción (Webhooks, CI/CD). |
+| **E1** | **Dominio y Puertos** | Núcleo inmutable: Entidades, lógica de negocio y definiciones de interfaces. |
+| **E2** | **Aplicación e Interacción** | Casos de uso: Orquestación del Radar, Generación de Propuestas y Protocolos de Ejecución. |
+| **E3** | **Infraestructura (Salida)** | Adaptadores: Upwork, Freelancer, Telegram, OpenAI/Gemini, ElevenLabs, Canva. |
+| **E4** | **Adaptadores de Entrada** | Escucha activa: Webhooks de Telegram y Monitoreo (Polling) de Upwork/Freelancer. |
 
 ---
 
 ## Sprints y Tareas Detalladas
 
-### Sprint 1: Capa de Dominio y Puertos (2 Semanas)
-*   **Objetivo:** Definir el núcleo inmutable del negocio y los contratos de interacción.
-*   **Historias de Usuario:**
-    *   **HU 1.1: Definir Entidades de Dominio:** Crear clases inmutables para `JobOffer`, `Proposal`, `ClientMessage`.
-    *   **HU 1.2: Definir Puertos de Salida (Base de Datos):** Crear interfaces (`JobRepository`, `ProposalRepository`) para guardar y recuperar datos.
-    *   **HU 1.3: Definir Puertos de Salida (Servicios Externos):** Crear interfaces (`UpworkPort`, `AIServicePort`, `NotificationPort`) para servicios externos.
-    *   **HU 1.4: Refactorizar Estructura de Directorios:** Mover el código existente a la nueva estructura hexagonal.
+### Sprint 1: Capa de Dominio y Puertos (Finalizado/Refinamiento)
+* **HU 1.1:** Definir Entidades de Dominio (`JobOffer`, `Proposal`, `ClientMessage`).
+* **HU 1.2:** Definir Puertos de Salida de Persistencia (`JobRepository`, `ProposalRepository`).
+* **HU 1.3:** Definir Puertos de Salida de Servicios (`FreelancePort`, `AIServicePort`, `NotificationPort`).
 
-### Sprint 2: Capa de Aplicación (Casos de Uso y Orquestación) (2 Semanas)
-*   **Objetivo:** Implementar la lógica de negocio central (Casos de Uso) que orquesta el flujo de trabajo.
-*   **Historias de Usuario:**
-    *   **HU 2.1: Caso de Uso "Buscar y Analizar Ofertas":** Implementar la lógica que llama a `UpworkPort` y luego a `AIServicePort`.
-    *   **HU 2.2: Caso de Uso "Generar Propuesta":** Implementar la lógica que usa el análisis de la IA para generar una propuesta y la guarda usando `ProposalRepository`.
-    *   **HU 2.3: Caso de Uso "Notificar Oportunidad":** Implementar la lógica que usa `NotificationPort` para enviar la propuesta a Telegram.
-    *   **HU 2.4: Integrar Casos de Uso con Celery:** Conectar los Casos de Uso a las tareas asíncronas.
+### Sprint 2: Casos de Uso de Captación y Notificación
+* **HU 2.1:** Caso de Uso `ScanAndAnalyzeJobs`: Orquestación Radar -> IA -> Notificación.
+* **HU 2.2:** Caso de Uso `GenerateProposal`: Generar Cover Letter personalizada con IA.
+* **HU 2.3:** Integrar con Celery para ejecución en segundo plano cada 30 min.
 
-### Sprint 3: Capa de Infraestructura (Adaptadores Concretos) (2 Semanas)
-*   **Objetivo:** Implementar los adaptadores concretos para los servicios externos.
-*   **Historias de Usuario:**
-    *   **HU 3.1: Adaptador de Base de Datos (SQLAlchemy):** Implementar `JobRepository` y `ProposalRepository` usando SQLAlchemy.
-    *   **HU 3.2: Adaptadores de Plataforma:**
-        *   Implementar `UpworkAdapter` usando la librería `python-upwork`.
-        *   **[NUEVO] Implementar `FreelancerAdapter` para Freelancer Developer (Prioritario).**
-    *   **HU 3.3: Adaptador de IA (OpenAI):** Implementar `AIServicePort` usando la librería `openai`.
-    *   **HU 3.4: Adaptador de Notificación (Telegram):** Implementar `NotificationPort` usando la API de Telegram.
+### Sprint 3: Infraestructura y Adaptadores de Salida
+* **HU 3.1:** Adaptadores de DB (PostgreSQL y MongoDB).
+* **HU 3.2:** Adaptadores de Plataforma (Upwork y **Freelancer.com**).
+* **HU 3.3:** Adaptador de IA (Estandarizar OpenAI/Gemini bajo `AIServicePort`).
+* **HU 3.4:** Adaptador de Notificación (Telegram Bot API).
 
-### Sprint 4: Integración, Webhooks y Despliegue Final (2 Semanas)
-*   **Objetivo:** Conectar todos los componentes, implementar los Puertos de Entrada (Webhooks) y finalizar el CI/CD.
-*   **Historias de Usuario:**
-    *   **HU 4.1: Puerto de Entrada (Telegram Webhook):** Implementar el endpoint de FastAPI que recibe mensajes de Telegram y llama al Caso de Uso "Procesar Respuesta".
-    *   **HU 4.2: Caso de Uso "Procesar Respuesta":** Implementar la lógica para manejar los comandos "ENVIAR", "RESPONDER" y las ediciones.
-    *   **HU 4.3: Inyección de Dependencias:** Configurar la inyección de los adaptadores concretos en los Casos de Uso.
-    *   **HU 4.4: Despliegue Final:** Ajustar la configuración de Render para el entorno de producción y verificar el CI/CD.
+### Sprint 4: Mensajería e Inbound (Arquitectura Híbrida)
+**Objetivo:** Que Janus "escuche" y reaccione a eventos externos de forma eficiente.
+* **HU 4.1: Puerto de Entrada (Inbound Listener):**
+    * Implementar Estrategia Push (Webhook) para Freelancer.com.
+    * Implementar Estrategia Pull (Polling) para Upwork usando Celery Beat (Intervalo 60s).
+    * Gestión de checkpoints en MongoDB para evitar duplicidad.
+* **HU 4.2: Relay de Mensajería:**
+    * Traducir eventos a DomainEvents.
+    * Notificaciones en Telegram con contexto del cliente y del Job.
+* **HU 4.3: Comandos de Respuesta (Bidireccional):**
+    * Comando `/reply [texto]` para responder a la plataforma desde Telegram.
+    * Comando `/approve` para autorizar el envío de propuestas en borrador.
+
+### 🔬 Sprint 5: Ejecución (Protocolo Científico)
+**Objetivo:** Automatizar la investigación y planificación usando herramientas especializadas.
+* **HU 5.1: Caso de Uso "Diagnóstico" (Investigación):**
+    * Integración con la API de Perplexity para investigación de mercado y técnica.
+    * Generación de reporte de hallazgos en Markdown.
+* **HU 5.2: Caso de Uso "Blueprint" (Planificación):**
+    * Generación de plan técnico detallado usando GPT-4o.
+    * Definición de arquitectura, tareas y prompts de ejecución.
+* **HU 5.3: Orquestador de Herramientas (Router):**
+    * Lógica de clasificación para asignar la tarea al Worker externo adecuado (Diseño/Video/Código).
+
+### 🎬 Sprint 6: Producción Multimedia (Workers Externos)
+**Objetivo:** Generar entregables usando APIs de terceros.
+* **HU 6.1: Worker de Imagen (Microsoft Designer/DALL-E):**
+    * Integración con API para generación de assets visuales y diseño gráfico.
+* **HU 6.2: Worker de Video (Pictory/CapCut/ElevenLabs):**
+    * Flujo de trabajo: Guion (GPT) -> Voz (ElevenLabs) -> Montaje de video (Pictory).
+* **HU 6.3: Caso de Uso "Cierre" (Entrega):**
+    * Recopilación de entregables de los distintos Workers.
+    * Generación de mensaje profesional y entrega en la plataforma externa.
 
 ---
+
+## 🛠️ Notas de Implementación (Herramientas Originales)
+* **Investigación:** Perplexity AI.
+* **Razonamiento/Plan:** GPT-4o.
+* **Imágenes:** Microsoft Designer API / DALL-E 3.
+* **Video/Audio:** Pictory AI & ElevenLabs.
+* **Backend:** FastAPI + Celery + MongoDB.

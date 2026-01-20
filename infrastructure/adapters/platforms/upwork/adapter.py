@@ -2,7 +2,7 @@ import os
 import logging
 import upwork
 from typing import List
-from domain.ports import UpworkPort
+from domain.ports import FreelancePlatformPort
 from domain.entities import JobOffer
 
 # NOTE: Since python-upwork API specifics can vary by version or auth method (OAuth2 usually),
@@ -10,7 +10,7 @@ from domain.entities import JobOffer
 # If exact method names differ in the library installed, they need adjustment.
 # For this sprint, we focus on structure.
 
-class UpworkAdapter(UpworkPort):
+class UpworkAdapter(FreelancePlatformPort):
     def __init__(self):
         # Load config from env
         self.consumer_key = os.getenv("UPWORK_CONSUMER_KEY")

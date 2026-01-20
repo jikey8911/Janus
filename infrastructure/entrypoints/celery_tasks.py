@@ -56,27 +56,103 @@ def scan_jobs_task(query: str = "(python OR automation)"):
     logging.info("Ejecutando Tarea: scan_jobs_task")
     
     # Inyección de dependencias (Manual por ahora)
-    upwork_adapter = DummyUpworkAdapter()
-    job_repo = DummyJobRepository()
-    ai_service = DummyAIService()
-    notification_service = DummyNotificationService()
+    # Seleccionamos el adaptador según configuración o por defecto Freelancer (Prioritario Sprint 3)
+    from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
+    from infrastructure.adapters.platforms.upwork.adapter import UpworkAdapter
+    
+    # Podemos hacer esto configurable via ENV
+    use_freelancer = True 
+    
+    if use_freelancer:
+        platform_adapter = FreelancerAdapter()
+    else:
+        platform_adapter = UpworkAdapter()
+        
+    if use_freelancer:
+        platform_adapter = FreelancerAdapter()
+    else:
+        platform_adapter = UpworkAdapter()
+        
+    # Inyección Real de Dependencias (Sprint 3 Complete)
+    try:
+        from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
+        from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
+        from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
+        
+        job_repo = MongoJobRepository(connection_string=os.getenv("DATABASE_URL", "mongodb://localhost:27017/"))
+        ai_service = OpenAIAdapter()
+        notification_service = TelegramAdapter()
+    except Exception as e:
+        logging.error(f"Error loading adapters: {e}. Falling back to mocks.")
+        job_repo = DummyJobRepository()
+        ai_service = DummyAIService()
+        notification_service = DummyNotificationService()
     
     use_case = ScanAndAnalyzeJobsUseCase(
-        upwork_port=upwork_adapter,
+        platform_port=platform_adapter,
+        job_repo=job_repo,
+        ai_port=ai_service,
+        notification_port=notification_service
+    )
+    
+    use_case = ScanAndAnalyzeJobsUseCase(
+        platform_port=platform_adapter,
         job_repo=job_repo,
         ai_port=ai_service,
         notification_port=notification_service
     )
     
     use_case.execute(query=query)
+
+@celery_app.task(name="poll_upwork_events_task")
+def poll_upwork_events_task():
+    """
+    Tarea periódica (Pull) para consultar eventos en Upwork (Polling Strategy).
+    Simula la consulta de nuevos mensajes o cambios de estado.
+    """
+    logging.info("Polling Upwork for new events...")
+    
+    # Dependencias
+    # notification_service = DummyNotificationService() # Reemplazado por TelegramAdapter real si estuviera importado
+    # relay_use_case = RelayClientMessageUseCase(notification_port=notification_service)
+
+    # TODO: Implementar lógica de consulta a UpworkAdapter
+    # updates = upwork_adapter.get_updates(since=last_checkpoint)
+    # for update in updates:
+    #     msg = ClientMessage(client_name=update.user, message_content=update.text, job_context=update.job_id)
+    #     relay_use_case.execute(msg)
+    pass
     logging.info("Tarea scan_jobs_task finalizada")
 
 @celery_app.task(name="generate_proposal_task")
 def generate_proposal_task(job_id: str):
     """
-    Tarea para generar una propuesta asíncronamente (ej: disparada por webhook).
-    NOTA: Para que funcione real, necesitamos el adapter real que saque el job de la DB real.
+    Tarea para generar una propuesta para un trabajo específico.
+    HU 2.2
     """
-    logging.info(f"Ejecutando Tarea: generate_proposal_task para job {job_id}")
-    # Pendiente conectar con GenerateProposalUseCase cuando tengamos DB real
-    pass
+    logging.info(f"Generating proposal for Job ID: {job_id}")
+    
+    # Inyección de Dependencias
+    try:
+        from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository, MongoProposalRepository
+        from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
+        from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
+        from application.use_cases import GenerateProposalUseCase
+        
+        db_url = os.getenv("DATABASE_URL", "mongodb://localhost:27017/")
+        job_repo = MongoJobRepository(connection_string=db_url)
+        proposal_repo = MongoProposalRepository(connection_string=db_url)
+        ai_service = OpenAIAdapter()
+        notification_service = TelegramAdapter()
+        
+        use_case = GenerateProposalUseCase(
+            job_repo=job_repo,
+            proposal_repo=proposal_repo,
+            ai_port=ai_service,
+            notification_port=notification_service
+        )
+        
+        use_case.execute(job_upwork_id=job_id)
+        
+    except Exception as e:
+        logging.error(f"Error in generate_proposal_task: {e}")
