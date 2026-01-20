@@ -34,6 +34,10 @@ class AIServicePort(ABC):
     def suggest_reply(self, message: ClientMessage) -> str:
         pass
 
+    @abstractmethod
+    def generate_proposal_content(self, job: JobOffer) -> str:
+        pass
+
 class NotificationPort(ABC):
     @abstractmethod
     def notify_opportunity(self, job: JobOffer, analysis: dict) -> bool:

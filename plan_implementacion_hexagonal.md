@@ -36,7 +36,9 @@ Refactorizar "Project Janus" a una Arquitectura Hexagonal (Puertos y Adaptadores
 *   **Objetivo:** Implementar los adaptadores concretos para los servicios externos.
 *   **Historias de Usuario:**
     *   **HU 3.1: Adaptador de Base de Datos (SQLAlchemy):** Implementar `JobRepository` y `ProposalRepository` usando SQLAlchemy.
-    *   **HU 3.2: Adaptador de Upwork:** Implementar `UpworkPort` usando la librería `python-upwork`.
+    *   **HU 3.2: Adaptadores de Plataforma:**
+        *   Implementar `UpworkAdapter` usando la librería `python-upwork`.
+        *   **[NUEVO] Implementar `FreelancerAdapter` para Freelancer Developer (Prioritario).**
     *   **HU 3.3: Adaptador de IA (OpenAI):** Implementar `AIServicePort` usando la librería `openai`.
     *   **HU 3.4: Adaptador de Notificación (Telegram):** Implementar `NotificationPort` usando la API de Telegram.
 
