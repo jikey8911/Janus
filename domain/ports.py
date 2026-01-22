@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union
+from datetime import datetime
 from .entities import JobOffer, Proposal, ClientMessage
 
 class JobRepository(ABC):
@@ -23,6 +24,50 @@ class FreelancePlatformPort(ABC):
 
     @abstractmethod
     def submit_proposal(self, job_id: str, content: str) -> bool:
+        pass
+
+class PlatformEventPort(ABC):
+    """
+    Puerto para recibir eventos de plataformas freelance.
+    Cada adaptador implementa su estrategia (webhook o polling).
+    """
+    
+    @abstractmethod
+    def get_proposal_status(self, proposal_id: str) -> str:
+        """
+        Consulta el estado actual de una propuesta.
+        
+        Returns:
+            'pending', 'awarded', 'rejected', 'expired'
+        """
+        pass
+    
+    @abstractmethod
+    def get_new_messages(self, proposal_id: str, since: datetime) -> List[ClientMessage]:
+        """
+        Obtiene mensajes nuevos del cliente desde un timestamp.
+        
+        Args:
+            proposal_id: ID de la propuesta en la plataforma
+            since: Timestamp desde el cual buscar mensajes
+            
+        Returns:
+            Lista de mensajes nuevos
+        """
+        pass
+    
+    @abstractmethod
+    def send_message(self, proposal_id: str, content: str) -> bool:
+        """
+        Envía un mensaje al cliente.
+        
+        Args:
+            proposal_id: ID de la propuesta
+            content: Contenido del mensaje
+            
+        Returns:
+            True si se envió exitosamente
+        """
         pass
 
 class AIServicePort(ABC):

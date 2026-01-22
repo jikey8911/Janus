@@ -25,24 +25,38 @@ class ScanAndAnalyzeJobsUseCase:
             logging.error(f"Error buscando trabajos en plataforma: {e}")
             return
 
+        # Importar generador de reportes
+        from infrastructure.utils.report_generator import MarkdownReportGenerator
+        report_gen = MarkdownReportGenerator()
+
         for job in jobs:
             try:
-                existing_job = self.job_repo.get_by_upwork_id(job.upwork_id)
+                existing_job = self.job_repo.get_by_upwork_id(job.external_id)
                 if not existing_job:
-                    logging.info(f"Nueva oferta encontrada: {job.title} ({job.upwork_id})")
+                    logging.info(f"Nueva oferta encontrada: {job.title} ({job.external_id})")
                     saved_job = self.job_repo.save(job)
                     
                     try:
+                        # Análisis con IA
                         analysis = self.ai_port.analyze_job(saved_job)
-                        logging.info(f"Análisis completado para {job.upwork_id}")
+                        logging.info(f"Análisis completado para {job.external_id}: Score {analysis.get('score', 0)}")
+                        
+                        # Generar reporte markdown
+                        try:
+                            report_path = report_gen.generate_job_analysis_report(saved_job, analysis)
+                            logging.info(f"Reporte generado: {report_path}")
+                        except Exception as report_err:
+                            logging.error(f"Error generando reporte markdown: {report_err}")
+                        
+                        # Notificar oportunidad
                         self.notification_port.notify_opportunity(saved_job, analysis)
                     except Exception as e:
-                        logging.error(f"Error analizando/notificando oferta {job.upwork_id}: {e}")
+                        logging.error(f"Error analizando/notificando oferta {job.external_id}: {e}")
                 else:
-                    logging.debug(f"Oferta ya existe: {job.upwork_id}")
+                    logging.debug(f"Oferta ya existe: {job.external_id}")
                     
             except Exception as e:
-                logging.error(f"Error procesando oferta {job.upwork_id}: {e}")
+                logging.error(f"Error procesando oferta {job.external_id}: {e}")
 
 class GenerateProposalUseCase:
     def __init__(
@@ -65,12 +79,16 @@ class GenerateProposalUseCase:
                 logging.error(f"Trabajo no encontrado: {job_upwork_id}")
                 return None
 
+            # Generar análisis primero para obtener score
+            analysis = self.ai_port.analyze_job(job)
+            score = analysis.get('score', 0)
+            
+            # Generar contenido de propuesta
             content = self.ai_port.generate_proposal_content(job)
             
-            # Asumimos que si no tiene ID aún, es 0 o None, pero el repo lo manejará.
-            # En entities.py Proposal.id es Optional[int].
+            # Crear propuesta en estado draft
             proposal = Proposal(
-                job_offer_id=job.id if job.id else 0, # Idealmente job debería tener ID si viene del repo
+                job_offer_id=job.id if job.id else 0,
                 content=content,
                 status="draft"
             )
@@ -78,10 +96,13 @@ class GenerateProposalUseCase:
             saved_proposal = self.proposal_repo.save(proposal)
             logging.info(f"Propuesta generada y guardada: {saved_proposal.id}")
             
-            self.notification_port.notify_message(
-                f"📝 **Propuesta Generada** (ID: {saved_proposal.id})\n\n"
-                f"{saved_proposal.content}\n\n"
-                f"👇 **Aprobar:**\n`/approve {saved_proposal.id}`"
+            # Enviar a Telegram para validación con botones inline
+            self.notification_port.send_proposal_for_validation(
+                job_title=job.title,
+                proposal_content=saved_proposal.content,
+                proposal_id=saved_proposal.id,
+                job_id=job.external_id,
+                analysis_score=score
             )
             
             return saved_proposal

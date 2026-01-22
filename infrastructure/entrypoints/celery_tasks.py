@@ -32,30 +32,29 @@ def scan_jobs_task(query: str = "Python"):
     logger.info(f"🕒 Ejecutando Tarea: Buscando ofertas para '{query}'...")
     
     try:
+        # Importar adaptadores y casos de uso
         from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
+        from infrastructure.adapters.analyzer.gemini.adapter import GeminiAdapter
+        from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
+        from application.use_cases import ScanAndAnalyzeJobsUseCase
         
-        # Instanciar adaptador (intentará leer ENV valid token)
-        adapter = FreelancerAdapter()
-        repo = MongoJobRepository()
+        # Instanciar adaptadores
+        platform_adapter = FreelancerAdapter()
+        ai_adapter = GeminiAdapter()
+        notification_adapter = TelegramAdapter()
+        job_repo = MongoJobRepository()
         
-        jobs = adapter.search_jobs(query)
+        # Ejecutar caso de uso completo
+        use_case = ScanAndAnalyzeJobsUseCase(
+            platform_port=platform_adapter,
+            job_repo=job_repo,
+            ai_port=ai_adapter,
+            notification_port=notification_adapter
+        )
         
-        if not jobs:
-            logger.info("⚠️ No se encontraron ofertas (o error en API).")
-            return
-            
-        logger.info(f"✅ Encontradas {len(jobs)} ofertas. Guardando...")
-        
-        saved_count = 0
-        for job in jobs:
-            try:
-                repo.save(job)
-                saved_count += 1
-            except Exception as save_err:
-                logger.error(f"Error guardando job: {save_err}")
-                
-        logger.info(f"💾 Guardadas {saved_count}/{len(jobs)} ofertas en MongoDB.")
+        use_case.execute(query)
+        logger.info("✅ Tarea de escaneo completada exitosamente.")
         
     except Exception as e:
         logger.error(f"❌ Error CRÍTICO en scan_jobs_task: {e}")

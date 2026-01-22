@@ -20,7 +20,12 @@ class Proposal:
     job_offer_id: int
     content: str
     id: Optional[int] = None
-    status: str = "draft" # draft, sent, accepted
+    # Estados: draft, approved, submitted, pending_award, awarded, rejected_by_client, withdrawn, expired
+    status: str = "draft"
+    platform_proposal_id: Optional[str] = None  # ID en la plataforma (Freelancer/Upwork)
+    submitted_at: Optional[datetime] = None
+    last_checked_at: Optional[datetime] = None
+    awarded_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
 @dataclass(frozen=True)

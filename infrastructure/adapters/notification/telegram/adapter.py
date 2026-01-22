@@ -1,7 +1,7 @@
 import os
 import logging
 import requests
-from typing import Union
+from typing import Union, Optional, List, Dict
 from domain.ports import NotificationPort
 from domain.entities import JobOffer, ClientMessage
 
@@ -9,17 +9,118 @@ class TelegramAdapter(NotificationPort):
     def __init__(self):
         self.bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
         self.chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        self.base_url = f"https://api.telegram.org/bot{self.bot_token}/sendMessage"
+        self.base_url = f"https://api.telegram.org/bot{self.bot_token}"
 
-    def _send_text(self, text: str) -> bool:
-        if not self.bot_token or not self.chat_id: return False
+    def _send_text(self, text: str, parse_mode: str = "Markdown", reply_markup: Optional[Dict] = None) -> bool:
+        """Envía un mensaje de texto a Telegram."""
+        if not self.bot_token or not self.chat_id:
+            logging.warning("Telegram credentials not configured")
+            return False
+        
         try:
-            requests.post(self.base_url, json={"chat_id": self.chat_id, "text": text}, timeout=10)
+            payload = {
+                "chat_id": self.chat_id,
+                "text": text,
+                "parse_mode": parse_mode
+            }
+            
+            if reply_markup:
+                payload["reply_markup"] = reply_markup
+            
+            response = requests.post(
+                f"{self.base_url}/sendMessage",
+                json=payload,
+                timeout=10
+            )
+            response.raise_for_status()
+            logging.info("Telegram message sent successfully")
             return True
-        except: return False
+        except Exception as e:
+            logging.error(f"Error sending Telegram message: {e}")
+            return False
+
+    def send_proposal_for_validation(
+        self, 
+        job_title: str, 
+        proposal_content: str, 
+        proposal_id: int,
+        job_id: str,
+        analysis_score: Optional[int] = None
+    ) -> bool:
+        """
+        Envía una propuesta a Telegram con botones de aprobación/rechazo.
+        
+        Args:
+            job_title: Título del trabajo
+            proposal_content: Contenido de la propuesta generada
+            proposal_id: ID de la propuesta en DB
+            job_id: ID externo del trabajo
+            analysis_score: Score del análisis (opcional)
+        """
+        # Construir mensaje
+        score_emoji = "🟢" if analysis_score and analysis_score >= 80 else "🟡" if analysis_score and analysis_score >= 60 else "🔴"
+        score_text = f"{score_emoji} Score: {analysis_score}/100\n" if analysis_score else ""
+        
+        message = f"""📝 **PROPUESTA GENERADA**
+
+**Trabajo:** {job_title}
+**ID:** `{job_id}`
+{score_text}
+---
+
+{proposal_content}
+
+---
+👇 **Selecciona una acción:**
+"""
+        
+        # Crear inline keyboard
+        inline_keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "✅ Aprobar y Enviar", "callback_data": f"approve_{proposal_id}"},
+                    {"text": "❌ Rechazar", "callback_data": f"reject_{proposal_id}"}
+                ],
+                [
+                    {"text": "✏️ Editar", "callback_data": f"edit_{proposal_id}"},
+                    {"text": "📊 Ver Análisis", "callback_data": f"analysis_{job_id}"}
+                ]
+            ]
+        }
+        
+        return self._send_text(message, reply_markup=inline_keyboard)
 
     def notify_opportunity(self, job: JobOffer, analysis: dict) -> bool:
-        return self._send_text(f"New Job: {job.title}")
+        """Notifica una nueva oportunidad con su análisis."""
+        score = analysis.get('score', 0)
+        viability = analysis.get('viability_analysis', 'N/A')
+        
+        # Emoji según score
+        if score >= 80:
+            emoji = "🟢"
+        elif score >= 60:
+            emoji = "🟡"
+        else:
+            emoji = "🔴"
+        
+        message = f"""{emoji} **NUEVA OPORTUNIDAD**
+
+**Título:** {job.title}
+**ID:** `{job.external_id}`
+**Presupuesto:** {job.budget}
+**Score:** {score}/100
+
+**Análisis:**
+{viability}
+
+---
+Usa `/generate {job.external_id}` para crear propuesta
+"""
+        
+        return self._send_text(message)
 
     def notify_message(self, message: Union[ClientMessage, str]) -> bool:
-        return self._send_text(str(message))
+        """Envía un mensaje genérico."""
+        text = message.content if isinstance(message, ClientMessage) else str(message)
+        return self._send_text(text)
+
