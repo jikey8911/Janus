@@ -51,26 +51,13 @@ pip install -r requirements.txt
 
 ## 🖥️ Ejecución en Desarrollo (Dev Services)
 
-Para levantar el sistema completo necesitas 3 terminales:
+¡Nuevo! Ahora puedes iniciar todos los servicios (Bot, Worker, Beat) con un solo comando:
 
-### Terminal 1: Telegram Bot (Interface)
-Inicia el bot para interactuar y recibir notificaciones.
 ```bash
-python infrastructure/entrypoints/telegram_bot.py
+python run.py
 ```
 
-### Terminal 2: Celery Worker (Cerebro)
-Procesa las tareas de IA y generación de propuestas.
-```bash
-celery -A infrastructure.celery_app worker --loglevel=info --pool=solo
-```
-*(Nota: En Windows usar `--pool=solo`, en Linux omitir o usar `prefork`)*
-
-### Terminal 3: Celery Beat (Scheduler)
-Ejecuta tareas periódicas como el polling de Upwork.
-```bash
-celery -A infrastructure.celery_app beat --loglevel=info
-```
+Esto abrirá los 3 procesos necesarios. Para detenerlos, simplemente presiona `Ctrl+C`.
 
 ### Opcional: Webhook Server (FastAPI)
 Si vas a recibir eventos vía Webhook.
