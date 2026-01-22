@@ -35,23 +35,22 @@ class TelegramAdapter(NotificationPort):
             return False
 
     def notify_opportunity(self, job: JobOffer, analysis: dict) -> bool:
-        # Format message with emojis and markdown
         score = analysis.get("score", 0)
-        reasoning = analysis.get("reasoning", "No analysis")
+        reasoning = analysis.get("analysis", "No analysis")
+        proposal = analysis.get("proposal", "No proposal generated")
         
         icon = "🟢" if score >= 80 else "🟡" if score >= 50 else "🔴"
         
         message = (
             f"{icon} **Nueva Oportunidad Detectada** (Score: {score}/100)\n\n"
             f"**Título:** {job.title}\n"
-            f"**Presupuesto:** {job.budget}\n"
-            f"**Categoría:** #{job.category or 'General'}\n\n"
-            f"**Resumen:** {job.description[:250]}...\n\n"
+            f"**Presupuesto:** {job.budget}\n\n"
             f"**Análisis IA:** {reasoning}\n\n"
-            f"🔗 [Ver en Upwork](https://www.upwork.com/jobs/{job.upwork_id})\n"
-            f"🆔 `{job.upwork_id}`\n"
+            f"**Propuesta Sugerida:**\n`{proposal}`\n\n"
+            f"🆔 `{job.upwork_id}`\n\n"
             f"👇 **Acciones:**\n"
-            f"`/generate {job.upwork_id}`"
+            f"✅ `/enviar {job.upwork_id}`\n"
+            f"✏️ Responde a este mensaje para editar la propuesta."
         )
         return self._send_text(message)
 
@@ -62,7 +61,9 @@ class TelegramAdapter(NotificationPort):
             text = (
                 f"📩 **Nuevo Mensaje de Cliente**\n\n"
                 f"**Cliente:** {message.client_name}\n"
-                f"**Contenido:** {message.message_content}\n"
-                f"**Contexto:** {message.job_context}"
+                f"**Contenido:** {message.message_content}\n\n"
+                f"🤖 **Respuesta Sugerida:**\n`{message.suggested_reply}`\n\n"
+                f"👇 **Acciones:**\n"
+                f"✅ `/responder {message.client_name}`"
             )
         return self._send_text(text)
