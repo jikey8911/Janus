@@ -6,7 +6,11 @@ from domain.ports import JobRepository, ProposalRepository, EventCheckpointRepos
 from domain.entities import JobOffer, Proposal
 
 class MongoJobRepository(JobRepository):
-    def __init__(self, connection_string: str, db_name: str = "janus_db"):
+    def __init__(self, connection_string: str = None, db_name: str = "janus_db"):
+        import os
+        if connection_string is None:
+            connection_string = os.getenv("DATABASE_URL", "mongodb://localhost:27017/")
+        
         self.client = MongoClient(connection_string)
         self.db = self.client[db_name]
         self.collection = self.db.jobs

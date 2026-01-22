@@ -14,7 +14,6 @@ class GeminiAdapter(AIServicePort):
             genai.configure(api_key=self.api_key)
             # Usamos Gemini 1.5 Flash por su velocidad y bajo costo para diagnóstico
             self.model = genai.GenerativeModel('gemini-1.5-flash')
-            # self.model = genai.GenerativeModel('gemini-2.0-flash-exp') # Opcional si está disponible
 
     def analyze_job(self, job: JobOffer) -> dict:
         """
