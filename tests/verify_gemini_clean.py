@@ -5,11 +5,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
+# Import from the CLEAN adapter file
+from infrastructure.adapters.gemini_adapter_v2 import GeminiAdapter
 from domain.entities import JobOffer
 
 def test_gemini():
-    print("🧪 Testing Gemini Adapter...")
+    print("🧪 Testing Gemini Adapter (CLEAN)...")
     
     adapter = GeminiAdapter()
     if not adapter.model:

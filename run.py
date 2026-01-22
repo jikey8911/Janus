@@ -19,13 +19,14 @@ def run_services():
     # 2. Celery Worker
     print("🧠 Launching Celery Worker...")
     # On Windows we use 'solo' pool or 'spawn' usually, but 'solo' is safer for simple dev
-    worker_cmd = ["celery", "-A", "infrastructure.celery_app", "worker", "--loglevel=info", "--pool=solo"]
+    # Use sys.executable -m celery to ensure we use the same python environment
+    worker_cmd = [sys.executable, "-m", "celery", "-A", "infrastructure.celery_app", "worker", "--loglevel=info", "--pool=solo"]
     worker_process = subprocess.Popen(worker_cmd)
     processes.append(worker_process)
     
     # 3. Celery Beat
     print("⏱️ Launching Celery Beat...")
-    beat_cmd = ["celery", "-A", "infrastructure.celery_app", "beat", "--loglevel=info"]
+    beat_cmd = [sys.executable, "-m", "celery", "-A", "infrastructure.celery_app", "beat", "--loglevel=info"]
     beat_process = subprocess.Popen(beat_cmd)
     processes.append(beat_process)
     

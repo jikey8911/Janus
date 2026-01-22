@@ -5,14 +5,14 @@ from typing import Optional
 @dataclass(frozen=True)
 class JobOffer:
     """Entidad de Dominio para una Oferta de Trabajo de Upwork."""
-    upwork_id: str
+    external_id: str  # Asegúrate de que se llame exactamente así
     title: str
     description: str
     budget: str
-    id: Optional[int] = None # ID interno de la DB
+    min_amount: float
+    currency: str
+    status: str = "pending"
     category: Optional[str] = None
-    status: str = "pending" # pending, analyzed, proposed, accepted
-    created_at: Optional[datetime] = None
 
 @dataclass(frozen=True)
 class Proposal:
