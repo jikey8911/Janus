@@ -48,7 +48,7 @@ Refactorizar y expandir "Project Janus" para automatizar no solo la captación, 
 ### 🔬 Sprint 5: Ejecución (Protocolo Científico)
 **Objetivo:** Automatizar la investigación y planificación usando herramientas especializadas.
 * **HU 5.1: Caso de Uso "Diagnóstico" (Investigación):**
-    * Integración con la API de Perplexity para investigación de mercado y técnica.
+    * Integración con la API de **Gemini Flash** para investigación de mercado y técnica.
     * Generación de reporte de hallazgos en Markdown.
 * **HU 5.2: Caso de Uso "Blueprint" (Planificación):**
     * Generación de plan técnico detallado usando GPT-4o.
