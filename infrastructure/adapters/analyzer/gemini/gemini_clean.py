@@ -43,7 +43,8 @@ class GeminiAdapter(AIServicePort):
             "key_risks": ["riesgo 1", "riesgo 2"],
             "recommended_stack": ["tecnología 1", "tecnología 2"],
             "research_topics": ["punto a investigar antes de ofertar"],
-            "suggested_bid": (monto numérico sugerido para ofertar basado en el presupuesto y complejidad)
+            "suggested_bid": (monto numérico sugerido para ofertar basado en el presupuesto y complejidad),
+            "category": (una de las siguientes: "audio", "video", "texto", "transcripcion", "diseno", "electronica", "desarrollo_software")
         }}
         """
 

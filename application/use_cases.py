@@ -9,12 +9,15 @@ class ScanAndAnalyzeJobsUseCase:
         platform_port: FreelancePlatformPort,
         job_repo: JobRepository,
         ai_port: AIServicePort,
-        notification_port: NotificationPort
+
+        notification_port: NotificationPort,
+        proposal_repo: Optional[ProposalRepository] = None
     ):
         self.platform_port = platform_port
         self.job_repo = job_repo
         self.ai_port = ai_port
         self.notification_port = notification_port
+        self.proposal_repo = proposal_repo
 
     def execute(self, query: str = "(python OR automation OR ai)", limit: int = 10, min_score: int = 0):
         logging.info(f"Iniciando búsqueda de trabajos con query: '{query}', limit: {limit}, min_score: {min_score}")
@@ -40,6 +43,10 @@ class ScanAndAnalyzeJobsUseCase:
         # Importar generador de reportes
         from infrastructure.utils.report_generator import MarkdownReportGenerator
         report_gen = MarkdownReportGenerator()
+        
+        # Contadores para resumen
+        analyzed_count = 0
+        approved_count = 0
 
         for job in jobs:
             try:
@@ -69,6 +76,7 @@ class ScanAndAnalyzeJobsUseCase:
 
                 # 2. Guardar y Notificar
                 job.analysis = analysis
+                job.category = analysis.get('category', 'unknown') # Guardar categoría detectada
                 saved_job = self.job_repo.save(job)
                 
                 # 3. Respuesta visual según decisión
@@ -83,13 +91,36 @@ class ScanAndAnalyzeJobsUseCase:
                 except Exception as report_err:
                     logging.error(f"Error generando reporte markdown: {report_err}")
                 
-                # 5. Notificar oportunidad a Telegram (Siempre enviamos para que el usuario vea la decisión de la IA)
-                self.notification_port.notify_opportunity(saved_job, analysis)
+                # 5. Lógica de Notificación y Generación Automática
+                analyzed_count += 1
+                if score > 60:
+                    approved_count += 1
+                    # Si tenemos repositorio de propuestas, generamos la propuesta automáticamente
+                    if self.proposal_repo:
+                        logging.info(f"Oportunidad Aprobada (>60): Generando propuesta automática para {job.external_id}")
+                        generator = GenerateProposalUseCase(
+                            job_repo=self.job_repo,
+                            proposal_repo=self.proposal_repo,
+                            ai_port=self.ai_port,
+                            notification_port=self.notification_port
+                        )
+                        generator.execute(job.external_id)
+                    else:
+                        # Fallback por si no se inyectó el repo
+                        logging.warning("No ProposalRepo rejected. Notification fallback.")
+                        self.notification_port.notify_opportunity(saved_job, analysis)
+                else:
+                    logging.info(f"Silenciando oferta {job.external_id} (Score {score} <= 60).")
                     
             except Exception as e:
                 error_msg = f"Error procesando oferta {job.external_id}: {e}"
                 logging.error(error_msg)
                 self.notification_port.notify_error(error_msg)
+        
+        # Enviar resumen final
+        if analyzed_count > 0:
+            summary_msg = f"📊 *Resumen de Análisis*\n\nOfertas Analizadas: {analyzed_count}\nAprobadas (>60): {approved_count}"
+            self.notification_port.notify_message(summary_msg)
 
 class GenerateProposalUseCase:
     def __init__(

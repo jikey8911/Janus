@@ -5,7 +5,7 @@ import asyncio
 # Adaptadores
 from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
 from infrastructure.adapters.platforms.upwork.adapter import UpworkAdapter
-from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
+from infrastructure.adapters.analyzer.groq.adapter import GroqAdapter
 from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
 from infrastructure.adapters.persistence.mongodb.adapter import MongoProposalRepository, MongoJobRepository, MongoEventCheckpointRepository
 from domain.entities import JobOffer
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 try:
     freelancer_adapter = FreelancerAdapter()
     upwork_adapter = UpworkAdapter() # Se mantiene para compatibilidad de infraestructura
-    ai_adapter = GeminiAdapter()
+    ai_adapter = GroqAdapter()
     telegram_adapter = TelegramAdapter()
 except Exception as e:
     logger.error(f"Error inicializando adaptadores en worker: {e}")
@@ -30,23 +30,25 @@ def scan_jobs_task(query: str = "", limit: int = 10):
     try:
         # Importar adaptadores y casos de uso
         from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
-        from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
+        from infrastructure.adapters.analyzer.groq.adapter import GroqAdapter
         from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
         from application.use_cases import ScanAndAnalyzeJobsUseCase
         
         # Instanciar adaptadores
         platform_adapter = FreelancerAdapter()
-        ai_adapter = GeminiAdapter()
+        ai_adapter = GroqAdapter()
         notification_adapter = TelegramAdapter()
         job_repo = MongoJobRepository()
+        proposal_repo = MongoProposalRepository()
         
         # Ejecutar caso de uso completo
         use_case = ScanAndAnalyzeJobsUseCase(
             platform_port=platform_adapter,
             job_repo=job_repo,
             ai_port=ai_adapter,
-            notification_port=notification_adapter
+            notification_port=notification_adapter,
+            proposal_repo=proposal_repo
         )
         
         use_case.execute(query, limit=limit)
@@ -72,7 +74,7 @@ def periodic_quick_scan_task():
     logger.info("🕒 Ejecutando Escaneo Rápido Periódico (1 Job, Score > 80)...")
     try:
         from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
-        from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
+        from infrastructure.adapters.analyzer.groq.adapter import GroqAdapter
         from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
         from application.use_cases import ScanAndAnalyzeJobsUseCase
@@ -80,8 +82,9 @@ def periodic_quick_scan_task():
         use_case = ScanAndAnalyzeJobsUseCase(
             platform_port=FreelancerAdapter(),
             job_repo=MongoJobRepository(),
-            ai_port=GeminiAdapter(),
-            notification_port=TelegramAdapter()
+            ai_port=GroqAdapter(),
+            notification_port=TelegramAdapter(),
+            proposal_repo=MongoProposalRepository()
         )
         
         # Limit=1, Min_Score=80 (Solo lo mejor de lo mejor), query vacío para amplitud
