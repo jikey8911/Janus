@@ -8,4 +8,7 @@ openai
 python-upwork
 python-dotenv
 requests
+google-genai
+python-telegram-bot
+pymongo
 
