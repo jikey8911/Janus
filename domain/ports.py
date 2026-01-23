@@ -45,6 +45,16 @@ class PlatformEventPort(ABC):
             'pending', 'awarded', 'rejected', 'expired'
         """
         pass
+
+    @abstractmethod
+    def get_platform_notifications(self) -> List[dict]:
+        """
+        Obtiene notificaciones generales y de proyectos de la plataforma.
+        
+        Returns:
+            Lista de diccionarios con datos crudos de notificaciones.
+        """
+        pass
     
     @abstractmethod
     def get_new_messages(self, proposal_id: str, since: datetime) -> List[ClientMessage]:

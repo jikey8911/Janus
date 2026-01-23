@@ -89,7 +89,7 @@ class TelegramAdapter(NotificationPort):
     def notify_opportunity(self, job: JobOffer, analysis: dict) -> bool:
         """Notifica una nueva oportunidad con su análisis."""
         score = analysis.get('score', 0)
-        viability = analysis.get('viability_analysis', 'N/A')
+        viability = analysis.get('viability') or analysis.get('viability_analysis') or 'N/A'
         
         # Emoji según score
         if score >= 80:
@@ -108,12 +108,20 @@ class TelegramAdapter(NotificationPort):
 
 **Análisis:**
 {viability}
-
----
-Usa `/generate {job.external_id}` para crear propuesta
 """
+        inline_keyboard = {
+            "inline_keyboard": [
+                [
+                    {"text": "🤖 Generar Propuesta", "callback_data": f"gen_force_{job.external_id}"},
+                    {"text": "📊 Ver Análisis", "callback_data": f"analysis_{job.external_id}"}
+                ],
+                [
+                    {"text": "❌ Descartar", "callback_data": f"discard_job_{job.external_id}"}
+                ]
+            ]
+        }
         
-        return self._send_text(message)
+        return self._send_text(message, reply_markup=inline_keyboard)
 
     def notify_message(self, message: Union[ClientMessage, str]) -> bool:
         """Envía un mensaje genérico."""

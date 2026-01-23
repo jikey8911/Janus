@@ -11,9 +11,13 @@ def run_services():
     
     processes = []
     
+    # Configurar environment para incluir el directorio actual
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.getcwd()
+    
     # 1. Telegram Bot
     print("🤖 Launching Telegram Bot...")
-    bot_process = subprocess.Popen([sys.executable, "infrastructure/entrypoints/telegram_bot.py"])
+    bot_process = subprocess.Popen([sys.executable, "infrastructure/entrypoints/telegram_bot.py"], env=env)
     processes.append(bot_process)
     
     # 2. Celery Worker
@@ -21,13 +25,13 @@ def run_services():
     # On Windows we use 'solo' pool or 'spawn' usually, but 'solo' is safer for simple dev
     # Use sys.executable -m celery to ensure we use the same python environment
     worker_cmd = [sys.executable, "-m", "celery", "-A", "infrastructure.celery_app", "worker", "--loglevel=info", "--pool=solo"]
-    worker_process = subprocess.Popen(worker_cmd)
+    worker_process = subprocess.Popen(worker_cmd, env=env)
     processes.append(worker_process)
     
     # 3. Celery Beat
     print("⏱️ Launching Celery Beat...")
     beat_cmd = [sys.executable, "-m", "celery", "-A", "infrastructure.celery_app", "beat", "--loglevel=info"]
-    beat_process = subprocess.Popen(beat_cmd)
+    beat_process = subprocess.Popen(beat_cmd, env=env)
     processes.append(beat_process)
     
     print("\n✅ All services started. Press Ctrl+C to stop.")

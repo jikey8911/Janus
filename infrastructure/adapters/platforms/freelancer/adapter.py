@@ -173,6 +173,7 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             "bidder_id": int(self.user_id),
             "amount": amount or 100.0,
             "period": 7,
+            "milestone_percentage": 100,
             "description": content
         }
         
@@ -192,6 +193,60 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
 
     # ========== PlatformEventPort Implementation ==========
     
+    def get_platform_notifications(self) -> List[dict]:
+        """
+        Obtiene notificaciones generales y de proyectos de Freelancer.com.
+        """
+        all_events = []
+        
+        # 1. Notificaciones generales
+        notifs = self.fetch_notifications()
+        if notifs and 'notifications' in notifs:
+            for n in notifs['notifications']:
+                n['source'] = 'general_notifications'
+                all_events.append(n)
+        
+        # 2. Actualizaciones de proyectos (adjudicaciones)
+        projects = self.fetch_project_updates()
+        if projects and 'projects' in projects:
+            for p in projects['projects']:
+                p['source'] = 'project_updates'
+                all_events.append(p)
+                
+        return all_events
+
+    def fetch_notifications(self, limit: int = 5) -> Optional[dict]:
+        """Consulta la API de notificaciones de Freelancer."""
+        url = f"{self.base_url}/notifications/0.1/notifications/"
+        params = {"limit": limit}
+        try:
+            response = self.session.get(url, params=params, timeout=10)
+            if response.ok:
+                return response.json().get('result', {})
+            logging.error(f"Error fetching notifications: {response.status_code}")
+            return None
+        except Exception as e:
+            logging.error(f"Network error fetching notifications: {e}")
+            return None
+
+    def fetch_project_updates(self, limit: int = 10) -> Optional[dict]:
+        """Consulta la API de proyectos (donde somos freelancer o dueños)."""
+        url = f"{self.base_url}/projects/0.1/projects/"
+        params = {
+            "role": "freelancer",
+            "status": "active",
+            "limit": limit
+        }
+        try:
+            response = self.session.get(url, params=params, timeout=10)
+            if response.ok:
+                return response.json().get('result', {})
+            logging.error(f"Error fetching project updates: {response.status_code}")
+            return None
+        except Exception as e:
+            logging.error(f"Network error fetching project updates: {e}")
+            return None
+
     def get_proposal_status(self, proposal_id: str) -> str:
         """
         Consulta el estado de una propuesta.

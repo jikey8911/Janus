@@ -37,10 +37,11 @@ class GeminiAdapter(AIServicePort):
         Devuelve estrictamente un objeto JSON con esta estructura:
         {{
             "score": (entero del 0 al 100),
-            "viability_analysis": "un párrafo corto explicando por qué es o no una buena oportunidad",
+            "viability": "un párrafo corto explicando por qué es o no una buena oportunidad",
             "key_risks": ["riesgo 1", "riesgo 2"],
             "recommended_stack": ["tecnología 1", "tecnología 2"],
-            "research_topics": ["punto a investigar antes de ofertar"]
+            "research_topics": ["punto a investigar antes de ofertar"],
+            "suggested_bid": (monto numérico sugerido para ofertar basado en el presupuesto y complejidad)
         }}
         """
         
@@ -49,7 +50,9 @@ class GeminiAdapter(AIServicePort):
                 prompt, 
                 generation_config={"response_mime_type": "application/json"}
             )
-            return json.loads(response.text)
+            analysis_res = json.loads(response.text)
+            logging.info(f"Gemini Analysis Output: {analysis_res}")
+            return analysis_res
         except Exception as e:
             logging.error(f"Error en analyze_job: {e}")
             return {"score": 0, "reasoning": f"Error de análisis: {str(e)}"}
@@ -84,8 +87,12 @@ class GeminiAdapter(AIServicePort):
             return "Gracias por tu mensaje. Lo revisaré pronto."
 
         prompt = f"""
-        El cliente dice: "{message.content}"
-        Sugiere una respuesta profesional y amable para mantener la conversación activa.
+        Como asistente experto de gestión de proyectos, sugiere una respuesta para este mensaje de un cliente:
+        De: {message.client_name}
+        Mensaje del cliente: "{message.message_content}"
+        Contexto del proyecto: {message.job_context}
+        
+        La respuesta debe ser profesional, servicial y mantener el interés del cliente.
         Responde en el mismo idioma que el cliente.
         """
 

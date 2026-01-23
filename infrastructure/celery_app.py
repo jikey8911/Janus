@@ -66,4 +66,9 @@ celery_app.conf.beat_schedule = {
         "task": "poll_upwork_events_task",
         "schedule": 60.0,  # 60 segundos (HU 4.1)
     },
+    "monitor-platform-notifications-5m": {
+        "task": "monitor_notifications_task",
+        "schedule": 300.0,  # 5 minutos
+        "args": ("freelancer",),
+    },
 }

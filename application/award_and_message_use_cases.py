@@ -190,3 +190,85 @@ class MonitorProposalsUseCase:
         except Exception as e:
             logger.error(f"Error monitoring proposals: {e}")
             raise
+
+
+class MonitorNotificationsUseCase:
+    """
+    Caso de uso para monitorear notificaciones y eventos de plataforma.
+    Filtra eventos nuevos por timestamp y genera alertas.
+    """
+
+    def __init__(
+        self,
+        platform_port: PlatformEventPort,
+        checkpoint_repo: EventCheckpointRepository,
+        notification_port: NotificationPort
+    ):
+        self.platform_port = platform_port
+        self.checkpoint_repo = checkpoint_repo
+        self.notification_port = notification_port
+
+    def execute(self, platform: str):
+        """
+        Ejecuta un ciclo de monitoreo para la plataforma especificada.
+        """
+        logger.info(f"Iniciando ciclo de monitoreo de notificaciones para: {platform}")
+        
+        try:
+            # 1. Obtener último timestamp procesado (Checkpoint)
+            checkpoint_key = f"{platform}_last_notif_sync"
+            last_sync_str = self.checkpoint_repo.get_last_processed_id(checkpoint_key)
+            last_sync = int(last_sync_str) if last_sync_str else 0
+            
+            # 2. Obtener notificaciones de la plataforma
+            events = self.platform_port.get_platform_notifications()
+            
+            new_events_count = 0
+            latest_timestamp = last_sync
+
+            for event in events:
+                event_time = event.get('time_created')
+                
+                # Si es un evento de proyecto, el tiempo puede estar en otro campo según la API
+                if not event_time and event.get('source') == 'project_updates':
+                     event_time = event.get('time_submitted') or last_sync + 1
+
+                if event_time and int(event_time) > last_sync:
+                    # 3. Procesar evento nuevo
+                    self._process_event(event)
+                    new_events_count += 1
+                    if int(event_time) > latest_timestamp:
+                        latest_timestamp = int(event_time)
+
+            # 4. Actualizar Checkpoint si hay novedades
+            if new_events_count > 0:
+                self.checkpoint_repo.update_last_processed_id(checkpoint_key, str(latest_timestamp))
+                logger.info(f"Ciclo completado. {new_events_count} eventos nuevos procesados.")
+            else:
+                logger.info("No se encontraron notificaciones nuevas.")
+
+        except Exception as e:
+            logger.error(f"Error en MonitorNotificationsUseCase: {e}")
+            raise
+
+    def _process_event(self, event: dict):
+        """Lógica interna para decidir qué notificar a Telegram."""
+        source = event.get('source')
+        
+        if source == 'general_notifications':
+            type_notif = event.get('type', 'SYSTEM')
+            message = event.get('message', 'Sin descripción')
+            alert = f"🔔 **Notificación {type_notif}:**\n{message}"
+            self.notification_port.notify_message(alert)
+            
+        elif source == 'project_updates':
+            project_id = event.get('id')
+            title = event.get('title')
+            status = event.get('status')
+            
+            if status == 'active':
+                alert = f"🚀 **Actualización de Proyecto:**\nID: `{project_id}`\nTítulo: {title}\nEstado: **ACTIVO**"
+                self.notification_port.notify_message(alert)
+            elif status == 'closed':
+                 alert = f"🏁 **Proyecto Finalizado/Cerrado:**\nID: `{project_id}`\nTítulo: {title}"
+                 self.notification_port.notify_message(alert)

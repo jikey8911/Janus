@@ -5,7 +5,7 @@ import asyncio
 # Adaptadores
 from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
 from infrastructure.adapters.platforms.upwork.adapter import UpworkAdapter
-from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
+from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
 from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
 from infrastructure.adapters.persistence.mongodb.adapter import MongoProposalRepository, MongoJobRepository, MongoEventCheckpointRepository
 from domain.entities import JobOffer
@@ -18,26 +18,26 @@ logger = logging.getLogger(__name__)
 try:
     freelancer_adapter = FreelancerAdapter()
     upwork_adapter = UpworkAdapter() # Se mantiene para compatibilidad de infraestructura
-    ai_adapter = OpenAIAdapter()
+    ai_adapter = GeminiAdapter()
     telegram_adapter = TelegramAdapter()
 except Exception as e:
     logger.error(f"Error inicializando adaptadores en worker: {e}")
 
 @shared_task(name="scan_jobs_task")
-def scan_jobs_task(query: str = "Python"):
-    logger.info(f"🕒 Ejecutando Tarea: Buscando ofertas para '{query}'...")
+def scan_jobs_task(query: str = "", limit: int = 10):
+    logger.info(f"🕒 Ejecutando Tarea: Buscando {limit} ofertas recientes (query: '{query}')...")
     
     try:
         # Importar adaptadores y casos de uso
         from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
-        from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
+        from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
         from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
         from application.use_cases import ScanAndAnalyzeJobsUseCase
         
         # Instanciar adaptadores
         platform_adapter = FreelancerAdapter()
-        ai_adapter = OpenAIAdapter()
+        ai_adapter = GeminiAdapter()
         notification_adapter = TelegramAdapter()
         job_repo = MongoJobRepository()
         
@@ -49,7 +49,7 @@ def scan_jobs_task(query: str = "Python"):
             notification_port=notification_adapter
         )
         
-        use_case.execute(query)
+        use_case.execute(query, limit=limit)
         logger.info("✅ Tarea de escaneo completada exitosamente.")
         
     except Exception as e:
@@ -66,7 +66,7 @@ def periodic_quick_scan_task():
     logger.info("🕒 Ejecutando Escaneo Rápido Periódico (1 Job, Score > 80)...")
     try:
         from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
-        from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
+        from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
         from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
         from application.use_cases import ScanAndAnalyzeJobsUseCase
@@ -74,12 +74,12 @@ def periodic_quick_scan_task():
         use_case = ScanAndAnalyzeJobsUseCase(
             platform_port=FreelancerAdapter(),
             job_repo=MongoJobRepository(),
-            ai_port=OpenAIAdapter(),
+            ai_port=GeminiAdapter(),
             notification_port=TelegramAdapter()
         )
         
-        # Limit=1, Min_Score=80 (Solo lo mejor de lo mejor)
-        use_case.execute(limit=1, min_score=80)
+        # Limit=1, Min_Score=80 (Solo lo mejor de lo mejor), query vacío para amplitud
+        use_case.execute(query="", limit=1, min_score=80)
         logger.info("✅ Escaneo periódico completado.")
         
     except Exception as e:
@@ -98,4 +98,30 @@ def generate_proposal_task(job_id: str):
     # 2. Analizar con IA
     # 3. Generar propuesta
     # 4. Guardar y Notificar
-    pass
+@shared_task(name="monitor_notifications_task")
+def monitor_notifications_task(platform: str = "freelancer"):
+    """
+    Tarea periódica (cada 5 min) para monitorear notificaciones de plataforma.
+    """
+    logger.info(f"🕒 Ejecutando Monitoreo de Notificaciones para '{platform}'...")
+    try:
+        from application.award_and_message_use_cases import MonitorNotificationsUseCase
+        from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
+        from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
+        from infrastructure.adapters.persistence.mongodb.adapter import MongoEventCheckpointRepository
+        
+        # En una arquitectura real, usaríamos la Factoría
+        from infrastructure.factories import PlatformFactory
+        platform_adapter = PlatformFactory.get_adapter(platform)
+        
+        use_case = MonitorNotificationsUseCase(
+            platform_port=platform_adapter,
+            checkpoint_repo=MongoEventCheckpointRepository(),
+            notification_port=TelegramAdapter()
+        )
+        
+        use_case.execute(platform)
+        logger.info(f"✅ Monitoreo de '{platform}' completado.")
+        
+    except Exception as e:
+        logger.error(f"❌ Error en monitor_notifications_task: {e}")

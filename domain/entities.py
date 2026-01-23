@@ -13,6 +13,8 @@ class JobOffer:
     currency: str
     status: str = "pending"
     category: Optional[str] = None
+    platform: str = "freelancer" # freelancer, upwork
+    analysis: Optional[dict] = None # Almacena el resultado de la IA
     id: Optional[int] = None
 
 @dataclass(frozen=False)
@@ -26,6 +28,7 @@ class Proposal:
     # Estados: draft, approved, submitted, pending_award, awarded, rejected_by_client, withdrawn, expired
     status: str = "draft"
     platform_proposal_id: Optional[str] = None
+    platform: str = "freelancer" # freelancer, upwork
     submitted_at: Optional[datetime] = None
     last_checked_at: Optional[datetime] = None
     awarded_at: Optional[datetime] = None

@@ -41,26 +41,37 @@ class ScanAndAnalyzeJobsUseCase:
 
         for job in jobs:
             try:
-                # Primero verificamos si ya existe para no analizar dos veces lo mismo
+                # Primero verificamos si ya existe
                 existing_job = self.job_repo.get_by_external_id(job.external_id)
-                if existing_job:
-                    logging.debug(f"Oferta ya existe: {job.external_id}")
-                    continue
-
-                logging.info(f"Nueva oferta encontrada: {job.title} ({job.external_id}). Analizando...")
                 
-                # 1. Análisis con IA ANTES de guardar (según solicitud del usuario)
+                # Si existe, solo continuamos si ya tiene análisis (para no repetir)
+                # Si existe NO tiene análisis, procedemos a analizarlo
+                if existing_job and getattr(existing_job, 'analysis', None):
+                    logging.info(f"Omitiendo: Oferta {job.external_id} ya analizada en DB.")
+                    continue
+                
+                logging.info(f"Procesando oferta: {job.title} ({job.external_id}). Analizando...")
+                
+                # 1. Análisis con IA
                 analysis = self.ai_port.analyze_job(job)
                 score = analysis.get('score', 0)
+                
+                # Fallback si el score es 0 pero hay razonamiento (posible error de parsing JSON en IA)
+                if score == 0 and "reasoning" in analysis:
+                    logging.warning(f"IA devolvió score 0 o error: {analysis.get('reasoning')}")
+                    # En este punto, no saltamos el guardado para que el usuario vea el error
+                
                 logging.info(f"Análisis completado para {job.external_id}: Score {score}")
 
-                # 2. Filtro de "Aprobación" (Solo si supera el min_score)
-                if score < min_score:
+                # 2. Filtro de "Aprobación" (Solo si supera el min_score o si es un error de IA permitimos pasar para debugging)
+                if score < min_score and score != 0:
                     logging.info(f"Oferta {job.external_id} rechazada por bajo score ({score} < {min_score})")
                     continue
 
                 # 3. Guardar solo si aprobó el filtro
+                job.analysis = analysis
                 saved_job = self.job_repo.save(job)
+                logging.info(f"Oferta {job.external_id} guardada con su análisis.")
                 
                 # 4. Generar reporte markdown
                 try:
@@ -115,8 +126,9 @@ class GenerateProposalUseCase:
             content = self.ai_port.generate_proposal_content(job)
             
             # Crear propuesta en estado draft
+            # Usamos el external_id del trabajo para facilitar el envío a plataforma posterior
             proposal = Proposal(
-                job_offer_id=job.id if job.id else 0,
+                job_offer_id=job.external_id,
                 content=content,
                 status="draft",
                 bid_amount=float(suggested_bid) if suggested_bid else None,
@@ -147,23 +159,109 @@ class GenerateProposalUseCase:
             return saved_proposal
 
         except Exception as e:
-            logging.error(f"Error crítico generando propuesta para {job_upwork_id}: {e}")
+            logging.error(f"Error crítico generando propuesta para {job_external_id}: {e}")
             return None
 
 class SubmitProposalUseCase:
     def __init__(
         self, 
-        platform_port: FreelancePlatformPort, 
         proposal_repo: ProposalRepository,
-        notification_port: NotificationPort
+        notification_port: NotificationPort,
+        job_repo: JobRepository,
+        platform_factory=None # Inyectar factoría o manejar adaptadores
     ):
-        self.platform_port = platform_port
+        self.proposal_repo = proposal_repo
+        self.notification_port = notification_port
+        self.job_repo = job_repo
+        self.platform_factory = platform_factory
+
+    def execute(self, proposal_id: int):
+        logging.info(f"Iniciando envío real de propuesta ID: {proposal_id}")
+        try:
+            # 1. Obtener propuesta
+            proposal = self.proposal_repo.get_by_id(proposal_id)
+            if not proposal:
+                logging.error(f"Propuesta {proposal_id} no encontrada.")
+                return False
+
+            # 2. Determinar plataforma
+            platform_name = getattr(proposal, 'platform', 'freelancer')
+            
+            # Obtener adaptador desde la factoría si está disponible
+            if self.platform_factory:
+                platform_adapter = self.platform_factory.get_adapter(platform_name)
+            else:
+                # Fallback o inyección directa si se prefiere
+                logging.error("PlatformFactory no disponible en SubmitProposalUseCase.")
+                return False
+
+            # 3. Obtener trabajo relacionado (opcional para el envío si ya tenemos ID externo)
+            job_id = str(proposal.job_offer_id)
+            job = self.job_repo.get_by_external_id(job_id)
+
+            # 4. Enviar a plataforma
+            success = platform_adapter.submit_proposal(
+                job_id=job_id, 
+                content=proposal.content,
+                amount=proposal.bid_amount
+            )
+            
+            if success:
+                # 4. Actualizar estado
+                proposal.status = "submitted"
+                from datetime import datetime
+                proposal.submitted_at = datetime.now()
+                self.proposal_repo.save(proposal)
+                nombre_trabajo = job.title if job else "desconocido"
+                self.notification_port.notify_message(f"✅ Propuesta enviada con éxito para el trabajo: {nombre_trabajo} (ID: {job_id})")
+            else:
+                nombre_trabajo = job.title if job else "desconocido"
+                self.notification_port.notify_message(f"❌ Error al enviar la propuesta para el trabajo: {nombre_trabajo} (ID: {job_id})")
+            
+            return success
+        except Exception as e:
+            logging.error(f"Error en SubmitProposalUseCase: {e}")
+            return False
+
+class UpdateProposalUseCase:
+    def __init__(self, proposal_repo: ProposalRepository, notification_port: NotificationPort):
         self.proposal_repo = proposal_repo
         self.notification_port = notification_port
 
-    def execute(self, job_external_id: str, content: str):
-        success = self.platform_port.submit_proposal(job_external_id, content)
-        if success:
-            # Aquí se guardaría la propuesta en el repo si fuera necesario
-            self.notification_port.notify_message(f"Propuesta enviada con éxito para {job_external_id}")
-        return success
+    def execute(self, proposal_id: int, new_content: str, new_amount: Optional[float] = None) -> bool:
+        logging.info(f"Actualizando propuesta ID: {proposal_id}")
+        try:
+            proposal = self.proposal_repo.get_by_id(proposal_id)
+            if not proposal:
+                return False
+            
+            proposal.content = new_content
+            if new_amount is not None:
+                proposal.bid_amount = new_amount
+            
+            self.proposal_repo.save(proposal)
+            self.notification_port.notify_message(f"📝 Propuesta {proposal_id} actualizada correctamente.")
+            return True
+        except Exception as e:
+            logging.error(f"Error actualizando propuesta: {e}")
+            return False
+
+class RejectProposalUseCase:
+    def __init__(self, proposal_repo: ProposalRepository, notification_port: NotificationPort):
+        self.proposal_repo = proposal_repo
+        self.notification_port = notification_port
+
+    def execute(self, proposal_id: int) -> bool:
+        logging.info(f"Rechazando propuesta ID: {proposal_id}")
+        try:
+            proposal = self.proposal_repo.get_by_id(proposal_id)
+            if not proposal:
+                return False
+            
+            proposal.status = "rejected"
+            self.proposal_repo.save(proposal)
+            self.notification_port.notify_message(f"🚫 Propuesta {proposal_id} marcada como rechazada.")
+            return True
+        except Exception as e:
+            logging.error(f"Error rechazando propuesta: {e}")
+            return False
