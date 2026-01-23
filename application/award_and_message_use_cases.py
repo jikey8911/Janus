@@ -50,7 +50,7 @@ class HandleProposalAwardedUseCase:
             logger.info(f"Proposal {proposal_id} marked as awarded")
             
             # 3. Obtener detalles del trabajo
-            job = self.job_repo.get_by_upwork_id(job_external_id)
+            job = self.job_repo.get_by_external_id(job_external_id)
             
             # 4. Notificar adjudicación por Telegram
             if job:

@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Union
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class JobOffer:
-    """Entidad de Dominio para una Oferta de Trabajo de Upwork."""
-    external_id: str  # Asegúrate de que se llame exactamente así
+    """Entidad de Dominio para una Oferta de Trabajo."""
+    external_id: str
     title: str
     description: str
     budget: str
@@ -13,16 +13,19 @@ class JobOffer:
     currency: str
     status: str = "pending"
     category: Optional[str] = None
+    id: Optional[int] = None
 
-@dataclass(frozen=True)
+@dataclass(frozen=False)
 class Proposal:
     """Entidad de Dominio para una Propuesta generada."""
-    job_offer_id: int
+    job_offer_id: Union[int, str]
     content: str
     id: Optional[int] = None
+    bid_amount: Optional[float] = None
+    currency: Optional[str] = None
     # Estados: draft, approved, submitted, pending_award, awarded, rejected_by_client, withdrawn, expired
     status: str = "draft"
-    platform_proposal_id: Optional[str] = None  # ID en la plataforma (Freelancer/Upwork)
+    platform_proposal_id: Optional[str] = None
     submitted_at: Optional[datetime] = None
     last_checked_at: Optional[datetime] = None
     awarded_at: Optional[datetime] = None

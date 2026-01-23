@@ -58,6 +58,10 @@ celery_app.conf.beat_schedule = {
         "task": "scan_jobs_task",
         "schedule": 600.0,  # 10 minutos
     },
+    "quick-scan-every-5-minutes": {
+        "task": "periodic_quick_scan_task",
+        "schedule": 300.0,  # 5 minutos (1 Job, Score > 80)
+    },
     "poll-upwork-every-minute": {
         "task": "poll_upwork_events_task",
         "schedule": 60.0,  # 60 segundos (HU 4.1)

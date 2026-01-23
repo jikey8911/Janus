@@ -13,7 +13,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import logging
 from dotenv import load_dotenv
-from infrastructure.adapters.analyzer.gemini.adapter import GeminiAdapter
+from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
+from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
 from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
 from infrastructure.utils.report_generator import MarkdownReportGenerator
 from domain.entities import JobOffer
@@ -27,52 +28,36 @@ load_dotenv()
 
 def main():
     print("=" * 70)
-    print("🚀 DEMO END-TO-END: Análisis → Propuesta → Telegram")
+    print("🚀 LIVE END-TO-END: Freelancer → OpenAI → Telegram")
     print("=" * 70)
     
-    # ========== PASO 1: Crear trabajo de prueba ==========
-    print("\n[PASO 1/5] Creando trabajo de prueba...")
-    job = JobOffer(
-        external_id="demo_e2e_001",
-        title="Python Backend Developer - FastAPI & PostgreSQL",
-        description="""
-        We're looking for an experienced Python developer to build a REST API.
-        
-        Requirements:
-        - 3+ years Python experience
-        - FastAPI framework
-        - PostgreSQL database design
-        - Docker containerization
-        - Unit testing with pytest
-        
-        Deliverables:
-        - Complete REST API with CRUD operations
-        - Database migrations
-        - API documentation (Swagger)
-        - Docker compose setup
-        
-        Budget: $2000-3500
-        Timeline: 3 weeks
-        """.strip(),
-        budget="2000-3500 USD",
-        min_amount=2000.0,
-        currency="USD",
-        status="pending",
-        category="Backend Development"
-    )
-    print(f"✅ Trabajo creado: {job.title}")
-    print(f"   ID: {job.external_id}")
-    print(f"   Presupuesto: {job.budget}")
-    
-    # ========== PASO 2: Analizar con Gemini ==========
-    print("\n[PASO 2/5] Analizando trabajo con Gemini AI...")
+    # ========== PASO 1: Obtener trabajo real de Freelancer ==========
+    print("\n[PASO 1/5] Obteniendo trabajo real de Freelancer...")
     try:
-        gemini = GeminiAdapter()
-        if not gemini.model:
-            print("❌ ERROR: Gemini no inicializado")
+        freelancer = FreelancerAdapter()
+        all_jobs = freelancer.search_jobs()
+        
+        if not all_jobs:
+            print("❌ ERROR: No se encontraron trabajos en Freelancer.")
+            return
+            
+        job = all_jobs[0]
+        print(f"✅ Trabajo capturado: {job.title}")
+        print(f"   ID: {job.external_id}")
+        print(f"   Presupuesto: {job.budget} {job.currency}")
+    except Exception as e:
+        print(f"❌ ERROR conectando a Freelancer: {e}")
+        return
+    
+    # ========== PASO 2: Analizar con OpenAI ==========
+    print("\n[PASO 2/5] Analizando trabajo con OpenAI...")
+    try:
+        openai_analyzer = OpenAIAdapter()
+        if not openai_analyzer.client:
+            print("❌ ERROR: OpenAI no inicializado")
             return
         
-        analysis = gemini.analyze_job(job)
+        analysis = openai_analyzer.analyze_job(job)
         score = analysis.get('score', 0)
         viability = analysis.get('viability_analysis', 'N/A')
         
@@ -94,9 +79,9 @@ def main():
         print(f"⚠️ Error generando reporte: {e}")
     
     # ========== PASO 4: Generar propuesta ==========
-    print("\n[PASO 4/5] Generando propuesta con Gemini...")
+    print("\n[PASO 4/5] Generando propuesta con OpenAI...")
     try:
-        proposal_content = gemini.generate_proposal_content(job)
+        proposal_content = openai_analyzer.generate_proposal_content(job)
         print(f"✅ Propuesta generada ({len(proposal_content)} caracteres)")
         print(f"\n--- PREVIEW DE PROPUESTA ---")
         print(proposal_content[:300] + "...")

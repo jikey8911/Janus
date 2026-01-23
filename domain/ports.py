@@ -9,12 +9,16 @@ class JobRepository(ABC):
         pass
 
     @abstractmethod
-    def get_by_upwork_id(self, upwork_id: str) -> Optional[JobOffer]:
+    def get_by_external_id(self, external_id: str) -> Optional[JobOffer]:
         pass
 
 class ProposalRepository(ABC):
     @abstractmethod
     def save(self, proposal: Proposal) -> Proposal:
+        pass
+
+    @abstractmethod
+    def get_by_id(self, proposal_id: int) -> Optional[Proposal]:
         pass
 
 class FreelancePlatformPort(ABC):
@@ -86,6 +90,19 @@ class AIServicePort(ABC):
 class NotificationPort(ABC):
     @abstractmethod
     def notify_opportunity(self, job: JobOffer, analysis: dict) -> bool:
+        pass
+
+    @abstractmethod
+    def send_proposal_for_validation(
+        self, 
+        job_title: str, 
+        proposal_content: str, 
+        proposal_id: int,
+        job_id: str,
+        analysis_score: Optional[int] = None,
+        bid_amount: Optional[float] = None,
+        currency: Optional[str] = "USD"
+    ) -> bool:
         pass
 
     @abstractmethod

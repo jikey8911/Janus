@@ -54,15 +54,12 @@ async def approve_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle /approve [proposal_id]
     """
-    # proposal_id = context.args[0] if context.args else "LAST_DRAFT"
-    
-    # TODO: Invoke Use Case
-    # success = approve_proposal_use_case.execute(proposal_id)
-    
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, 
-        text="✅ Propuesta aprobada y enviada (Simulado)."
-    )
+    if not context.args:
+        await context.bot.send_message(chat_id=update.effective_chat.id, text="⚠️ Uso: /approve [proposal_id]")
+        return
+        
+    proposal_id = context.args[0]
+    await handle_approve_proposal(update.callback_query or update, proposal_id)
 
 async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -88,8 +85,20 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # So we will call it synchronously for the DEMO to ensure user sees the result in logs.
     
     try:
-        generate_proposal_task(job_id=job_id) # Sync call for demo
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"✅ Propuesta generada (Worker finished).")
+        from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository, MongoProposalRepository
+        from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
+        from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
+        from application.use_cases import GenerateProposalUseCase
+        
+        use_case = GenerateProposalUseCase(
+            job_repo=MongoJobRepository(),
+            proposal_repo=MongoProposalRepository(),
+            ai_port=OpenAIAdapter(),
+            notification_port=TelegramAdapter()
+        )
+        
+        use_case.execute(job_id)
+        # La notificación ya la envía el use case
     except Exception as e:
          await context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ Error generando propuesta: {e}")
 
@@ -123,35 +132,68 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         await query.edit_message_text(text=f"❌ Acción desconocida: {action}")
 
 async def handle_approve_proposal(query, proposal_id: str):
-    """Handle proposal approval."""
+    """Handle proposal approval and submit to Freelancer.com."""
     try:
-        # Import use cases
         from infrastructure.adapters.persistence.mongodb.adapter import MongoProposalRepository, MongoJobRepository
         from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
         
-        # Get proposal from DB
+        # 1. Obtener propuesta y trabajo de DB
         proposal_repo = MongoProposalRepository()
-        # TODO: Implement get_by_id in repository
-        # proposal = proposal_repo.get_by_id(int(proposal_id))
+        job_repo = MongoJobRepository()
         
-        # For now, simulate submission
-        await query.edit_message_text(
-            text=f"✅ **PROPUESTA APROBADA Y ENVIADA**\n\n"
-                 f"ID: {proposal_id}\n"
-                 f"Estado: `submitted` (Enviada a la plataforma)\n\n"
-                 f"📊 **Próximos pasos:**\n"
-                 f"• El sistema monitoreará el estado cada 5 minutos\n"
-                 f"• Recibirás notificación si el cliente responde\n"
-                 f"• Te avisaré cuando sea adjudicada o rechazada\n\n"
-                 f"⏳ **Esperando respuesta del cliente...**"
+        proposal = proposal_repo.get_by_id(int(proposal_id))
+        if not proposal:
+            msg = f"❌ Error: Propuesta {proposal_id} no encontrada en DB."
+            if hasattr(query, 'edit_message_text'):
+                await query.edit_message_text(text=msg)
+            else:
+                await query.bot.send_message(chat_id=query.effective_chat.id, text=msg)
+            return
+
+        job = job_repo.get_by_external_id(proposal.job_offer_id if isinstance(proposal.job_offer_id, str) else str(proposal.job_offer_id))
+        # Nota: el campo se llama upwork_id en el repo pero lo usamos de forma genérica para external_id
+        
+        # 2. Enviar a Freelancer
+        freelancer = FreelancerAdapter()
+        success = freelancer.submit_proposal(
+            job_id=job.external_id if job else str(proposal.job_offer_id),
+            content=proposal.content,
+            amount=proposal.bid_amount
         )
         
-        logging.info(f"Proposal {proposal_id} approved and submitted to platform")
-        logging.info(f"Status: submitted → monitoring started")
+        if success:
+            # 3. Actualizar estado
+            proposal.status = "submitted"
+            proposal_repo.save(proposal)
+            
+            msg = (
+                f"✅ **PROPUESTA ENVIADA A FREELANCER.COM**\n\n"
+                f"ID Interno: {proposal_id}\n"
+                f"Proyecto: {job.title if job else 'N/A'}\n"
+                f"Monto: {proposal.bid_amount} {proposal.currency}\n\n"
+                f"📊 **Estado:** `submitted` (Activa)\n\n"
+                f"⏳ **Esperando respuesta del cliente...**"
+            )
+            if hasattr(query, 'edit_message_text'):
+                await query.edit_message_text(text=msg, parse_mode="Markdown")
+            else:
+                await query.bot.send_message(chat_id=query.effective_chat.id, text=msg, parse_mode="Markdown")
+        else:
+            msg = f"❌ Error al enviar la propuesta a Freelancer.com. Revisa los logs."
+            if hasattr(query, 'edit_message_text'):
+                await query.edit_message_text(text=msg)
+            else:
+                 await query.bot.send_message(chat_id=query.effective_chat.id, text=msg)
         
     except Exception as e:
         logging.error(f"Error approving proposal: {e}")
-        await query.edit_message_text(text=f"❌ Error aprobando propuesta: {e}")
+        import traceback
+        traceback.print_exc()
+        msg = f"❌ Error: {e}"
+        if hasattr(query, 'edit_message_text'):
+            await query.edit_message_text(text=msg)
+        else:
+            await query.bot.send_message(chat_id=query.effective_chat.id, text=msg)
 
 async def handle_reject_proposal(query, proposal_id: str):
     """Handle proposal rejection."""

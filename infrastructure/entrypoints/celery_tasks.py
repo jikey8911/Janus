@@ -2,11 +2,11 @@ from celery import shared_task
 import logging
 import asyncio
 
-# Adaptadores (Lazy Imports para evitar ciclos si es necesario, pero mejor arriba si están limpios)
+# Adaptadores
+from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
 from infrastructure.adapters.platforms.upwork.adapter import UpworkAdapter
 from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
-# from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter # Usaremos la version limpia V2 si aplica
-from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter # Usar simple_telegram si sigue fallando
+from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
 from infrastructure.adapters.persistence.mongodb.adapter import MongoProposalRepository, MongoJobRepository, MongoEventCheckpointRepository
 from domain.entities import JobOffer
 
@@ -14,16 +14,12 @@ from domain.entities import JobOffer
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Instancias de adaptadores (Singleton-ish para el worker)
-# En produccion, inyeccion de dependencias mas robusta
+# Instancias de adaptadores principal (Freelancer)
 try:
-    upwork_adapter = UpworkAdapter()
-    # openai_adapter = OpenAIAdapter() # Comentado si no se usa aun o si da error
-    # telegram_adapter = TelegramAdapter()
-    
-    # Repositorios
-    # job_repo = MongoJobRepository()
-    # proposal_repo = MongoProposalRepository()
+    freelancer_adapter = FreelancerAdapter()
+    upwork_adapter = UpworkAdapter() # Se mantiene para compatibilidad de infraestructura
+    ai_adapter = OpenAIAdapter()
+    telegram_adapter = TelegramAdapter()
 except Exception as e:
     logger.error(f"Error inicializando adaptadores en worker: {e}")
 
@@ -34,14 +30,14 @@ def scan_jobs_task(query: str = "Python"):
     try:
         # Importar adaptadores y casos de uso
         from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
-        from infrastructure.adapters.analyzer.gemini.adapter import GeminiAdapter
+        from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
         from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
         from application.use_cases import ScanAndAnalyzeJobsUseCase
         
         # Instanciar adaptadores
         platform_adapter = FreelancerAdapter()
-        ai_adapter = GeminiAdapter()
+        ai_adapter = OpenAIAdapter()
         notification_adapter = TelegramAdapter()
         job_repo = MongoJobRepository()
         
@@ -60,6 +56,34 @@ def scan_jobs_task(query: str = "Python"):
         logger.error(f"❌ Error CRÍTICO en scan_jobs_task: {e}")
         import traceback
         logger.error(traceback.format_exc())
+
+@shared_task(name="periodic_quick_scan_task")
+def periodic_quick_scan_task():
+    """
+    Tarea periódica: Obtiene solo la oferta más reciente (limit=1).
+    Solo se guarda y notifica si el score de IA es >= 80 (aprobación automática).
+    """
+    logger.info("🕒 Ejecutando Escaneo Rápido Periódico (1 Job, Score > 80)...")
+    try:
+        from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
+        from infrastructure.adapters.analyzer.openai.adapter import OpenAIAdapter
+        from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
+        from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
+        from application.use_cases import ScanAndAnalyzeJobsUseCase
+        
+        use_case = ScanAndAnalyzeJobsUseCase(
+            platform_port=FreelancerAdapter(),
+            job_repo=MongoJobRepository(),
+            ai_port=OpenAIAdapter(),
+            notification_port=TelegramAdapter()
+        )
+        
+        # Limit=1, Min_Score=80 (Solo lo mejor de lo mejor)
+        use_case.execute(limit=1, min_score=80)
+        logger.info("✅ Escaneo periódico completado.")
+        
+    except Exception as e:
+        logger.error(f"❌ Error en periodic_quick_scan_task: {e}")
 
 @shared_task(name="poll_upwork_events_task")
 def poll_upwork_events_task():

@@ -88,10 +88,10 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
 
     # ========== FreelancePlatformPort Implementation ==========
 
-    def search_jobs(self, query: str = "") -> List[JobOffer]:
+    def search_jobs(self, query: str = "", limit: int = 10) -> List[JobOffer]:
         """
         Busca trabajos en Freelancer.com
-        Si query está vacío, retorna los últimos 10 trabajos.
+        Si query está vacío, retorna los últimos trabajos (por defecto 10).
         """
         url = f"{self.base_url}/projects/0.1/projects/active/"
         
@@ -99,7 +99,7 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
         params = {
             "job_details": "true",
             "project_types[]": "fixed",
-            "limit": 10,
+            "limit": limit,
             "sort_field": "time_submitted",
             "compact": "true"
         }

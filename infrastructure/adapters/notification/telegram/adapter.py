@@ -45,28 +45,24 @@ class TelegramAdapter(NotificationPort):
         proposal_content: str, 
         proposal_id: int,
         job_id: str,
-        analysis_score: Optional[int] = None
+        analysis_score: Optional[int] = None,
+        bid_amount: Optional[float] = None,
+        currency: Optional[str] = "USD"
     ) -> bool:
         """
         Envía una propuesta a Telegram con botones de aprobación/rechazo.
-        
-        Args:
-            job_title: Título del trabajo
-            proposal_content: Contenido de la propuesta generada
-            proposal_id: ID de la propuesta en DB
-            job_id: ID externo del trabajo
-            analysis_score: Score del análisis (opcional)
         """
         # Construir mensaje
         score_emoji = "🟢" if analysis_score and analysis_score >= 80 else "🟡" if analysis_score and analysis_score >= 60 else "🔴"
         score_text = f"{score_emoji} Score: {analysis_score}/100\n" if analysis_score else ""
+        bid_text = f"💰 **Monto Sugerido:** {bid_amount} {currency}\n" if bid_amount else ""
         
         message = f"""📝 **PROPUESTA GENERADA**
-
-**Trabajo:** {job_title}
-**ID:** `{job_id}`
-{score_text}
----
+ 
+ **Trabajo:** {job_title}
+ **ID:** `{job_id}`
+ {score_text}{bid_text}
+ ---
 
 {proposal_content}
 

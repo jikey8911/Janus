@@ -17,14 +17,14 @@ class MongoJobRepository(JobRepository):
     def save(self, job: JobOffer) -> JobOffer:
         data = job.__dict__.copy()
         self.collection.find_one_and_update(
-            {"upwork_id": job.upwork_id},
+            {"external_id": job.external_id},
             {"$set": data},
             upsert=True
         )
         return job
 
-    def get_by_upwork_id(self, upwork_id: str) -> Optional[JobOffer]:
-        doc = self.collection.find_one({"upwork_id": upwork_id})
+    def get_by_external_id(self, external_id: str) -> Optional[JobOffer]:
+        doc = self.collection.find_one({"external_id": external_id})
         if doc:
             data = {k: v for k, v in doc.items() if k != "_id"}
             return JobOffer(**data)
@@ -46,7 +46,15 @@ class MongoProposalRepository(ProposalRepository):
              import random
              data["id"] = random.randint(1000, 999999)
              self.collection.insert_one(data)
+             proposal.id = data["id"]
         return proposal
+
+    def get_by_id(self, proposal_id: int) -> Optional[Proposal]:
+        doc = self.collection.find_one({"id": proposal_id})
+        if doc:
+            data = {k: v for k, v in doc.items() if k != "_id"}
+            return Proposal(**data)
+        return None
 
 class MongoEventCheckpointRepository(EventCheckpointRepository):
     def __init__(self, db_url: str = None, db_name: str = "janus_db"):
