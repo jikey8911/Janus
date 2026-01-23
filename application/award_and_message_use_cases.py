@@ -71,8 +71,9 @@ class HandleProposalAwardedUseCase:
             # start_production_workflow(proposal_id, job)
             
         except Exception as e:
-            logger.error(f"Error handling proposal award: {e}")
-            raise
+            error_msg = f"Error manejando adjudicación de propuesta {proposal_id}: {e}"
+            logger.error(error_msg)
+            self.notification_port.notify_error(error_msg)
 
 
 class HandleClientMessageUseCase:
@@ -142,8 +143,9 @@ _Usa los botones para aprobar o editar la respuesta._
             logger.info(f"Message sent to Telegram for approval")
             
         except Exception as e:
-            logger.error(f"Error handling client message: {e}")
-            raise
+            error_msg = f"Error manejando mensaje de cliente: {e}"
+            logger.error(error_msg)
+            self.notification_port.notify_error(error_msg)
 
 
 class MonitorProposalsUseCase:
@@ -188,7 +190,12 @@ class MonitorProposalsUseCase:
             logger.info("Proposal monitoring completed")
             
         except Exception as e:
-            logger.error(f"Error monitoring proposals: {e}")
+            # Nota: Este caso de uso no tiene inyectado el notification_port directamente en el constructor
+            # pero HandleProposalAwardedUseCase sí lo tiene si se llamara.
+            # Sin embargo, agregamos el log y si es posible notificamos.
+            logger.error(f"Error monitoreando propuestas: {e}")
+            # No enviamos a telegram aquí porque no tenemos el puerto inyectado en este UC específico
+            # pero el error subirá a la tarea de Celery que sí notifica.
             raise
 
 
@@ -248,8 +255,9 @@ class MonitorNotificationsUseCase:
                 logger.info("No se encontraron notificaciones nuevas.")
 
         except Exception as e:
-            logger.error(f"Error en MonitorNotificationsUseCase: {e}")
-            raise
+            error_msg = f"Error en MonitorNotificationsUseCase ({platform}): {e}"
+            logger.error(error_msg)
+            self.notification_port.notify_error(error_msg)
 
     def _process_event(self, event: dict):
         """Lógica interna para decidir qué notificar a Telegram."""

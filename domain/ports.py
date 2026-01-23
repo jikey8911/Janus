@@ -119,6 +119,14 @@ class NotificationPort(ABC):
     def notify_message(self, message: Union[ClientMessage, str]) -> bool:
         pass
 
+    @abstractmethod
+    def notify_error(self, message: str) -> bool:
+        pass
+
+    @abstractmethod
+    def notify_warning(self, message: str) -> bool:
+        pass
+
 class EventCheckpointRepository(ABC):
     @abstractmethod
     def get_last_processed_id(self, source: str) -> str:

@@ -113,7 +113,13 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         use_case.execute(job_id)
         # La notificación ya la envía el use case
     except Exception as e:
-         await context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ Error generando propuesta: {e}")
+         error_msg = f"❌ Error generando propuesta: {e}"
+         await context.bot.send_message(chat_id=update.effective_chat.id, text=error_msg)
+         try:
+             from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
+             TelegramAdapter().notify_error(error_msg)
+         except:
+             pass
 
 async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
@@ -131,7 +137,13 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         scan_jobs_task(limit=15)
         await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Escaneo masivo completado. Revisa las nuevas notificaciones.")
     except Exception as e:
-        await context.bot.send_message(chat_id=update.effective_chat.id, text=f"❌ Error en búsqueda masiva: {e}")
+        error_msg = f"❌ Error en búsqueda masiva: {e}"
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=error_msg)
+        try:
+            from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
+            TelegramAdapter().notify_error(error_msg)
+        except:
+            pass
 
 async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """

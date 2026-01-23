@@ -53,7 +53,13 @@ def scan_jobs_task(query: str = "", limit: int = 10):
         logger.info("✅ Tarea de escaneo completada exitosamente.")
         
     except Exception as e:
-        logger.error(f"❌ Error CRÍTICO en scan_jobs_task: {e}")
+        error_msg = f"❌ Error CRÍTICO en scan_jobs_task: {e}"
+        logger.error(error_msg)
+        try:
+            from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
+            TelegramAdapter().notify_error(error_msg)
+        except:
+            pass
         import traceback
         logger.error(traceback.format_exc())
 
@@ -83,7 +89,13 @@ def periodic_quick_scan_task():
         logger.info("✅ Escaneo periódico completado.")
         
     except Exception as e:
-        logger.error(f"❌ Error en periodic_quick_scan_task: {e}")
+        error_msg = f"❌ Error en periodic_quick_scan_task: {e}"
+        logger.error(error_msg)
+        try:
+            from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
+            TelegramAdapter().notify_error(error_msg)
+        except:
+            pass
 
 @shared_task(name="poll_upwork_events_task")
 def poll_upwork_events_task():

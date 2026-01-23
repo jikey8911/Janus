@@ -4,7 +4,8 @@ import json
 from typing import List
 from domain.ports import AIServicePort
 from domain.entities import JobOffer, ClientMessage
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 class GeminiAdapter(AIServicePort):
     def __init__(self):
@@ -14,15 +15,15 @@ class GeminiAdapter(AIServicePort):
             self.model = None
         else:
             try:
-                genai.configure(api_key=self.api_key)
-                # Usamos 2.5 Flash para mayor velocidad y disponibilidad confirmada
-                self.model = genai.GenerativeModel('gemini-2.5-flash')
+                # Usamos el nuevo SDK google-genai
+                self.client = genai.Client(api_key=self.api_key)
+                self.model_name = 'gemini-1.5-pro'
             except Exception as e:
                 logging.error(f"Error al configurar Gemini: {e}")
-                self.model = None
+                self.client = None
 
     def analyze_job(self, job: JobOffer) -> dict:
-        if not self.model:
+        if not self.client:
             return {"score": 0, "reasoning": "Cliente Gemini no inicializado"}
 
         prompt = f"""
@@ -45,9 +46,12 @@ class GeminiAdapter(AIServicePort):
         
         try:
             # Forzamos respuesta tipo JSON
-            response = self.model.generate_content(
-                prompt, 
-                generation_config={"response_mime_type": "application/json"}
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
             )
             return json.loads(response.text)
         except Exception as e:
@@ -56,7 +60,7 @@ class GeminiAdapter(AIServicePort):
 
     def generate_proposal_content(self, job: JobOffer) -> str:
         """Genera el texto de la propuesta para enviar a Freelancer."""
-        if not self.model:
+        if not self.client:
             return "Interesado en el proyecto."
 
         prompt = f"""
@@ -72,7 +76,10 @@ class GeminiAdapter(AIServicePort):
         """
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             return response.text.strip()
         except Exception as e:
             logging.error(f"Error generando propuesta: {e}")

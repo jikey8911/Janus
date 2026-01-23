@@ -99,12 +99,15 @@ class TelegramAdapter(NotificationPort):
         else:
             emoji = "🔴"
         
-        message = f"""{emoji} **NUEVA OPORTUNIDAD**
-
+        decision = analysis.get('decision', 'N/A').upper()
+        
+        message = f"""{emoji} **ANÁLISIS DE OPORTUNIDAD**
+        
 **Título:** {job.title}
 **ID:** `{job.external_id}`
 **Presupuesto:** {job.budget}
 **Score:** {score}/100
+**Decisión IA:** {decision}
 
 **Análisis:**
 {viability}
@@ -126,5 +129,15 @@ class TelegramAdapter(NotificationPort):
     def notify_message(self, message: Union[ClientMessage, str]) -> bool:
         """Envía un mensaje genérico."""
         text = message.content if isinstance(message, ClientMessage) else str(message)
+        return self._send_text(text)
+
+    def notify_error(self, message: str) -> bool:
+        """Notifica un error crítico."""
+        text = f"🚨 **ERROR DEL SISTEMA**\n\n{message}"
+        return self._send_text(text)
+
+    def notify_warning(self, message: str) -> bool:
+        """Notifica una advertencia o fallo menor."""
+        text = f"⚠️ **ADVERTENCIA**\n\n{message}"
         return self._send_text(text)
 

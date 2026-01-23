@@ -4,7 +4,8 @@ import json
 from typing import Dict, Any
 from domain.ports import AIServicePort
 from domain.entities import JobOffer, ClientMessage
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 class GeminiAdapter(AIServicePort):
     def __init__(self):
@@ -14,21 +15,21 @@ class GeminiAdapter(AIServicePort):
             self.model = None
         else:
             try:
-                genai.configure(api_key=self.api_key)
-                # Usamos gemini-1.5-flash: rápido, económico y excelente para JSON
-                self.model = genai.GenerativeModel('gemini-1.5-flash')
+                # Usamos el nuevo SDK google-genai
+                self.client = genai.Client(api_key=self.api_key)
+                self.model_name = 'gemini-1.5-pro'
             except Exception as e:
                 logging.error(f"Error configurando Gemini: {e}")
-                self.model = None
+                self.client = None
 
     def analyze_job(self, job: JobOffer) -> Dict[str, Any]:
         """Analiza la viabilidad de una oferta de Freelancer."""
-        if not self.model:
+        if not self.client:
             return {"score": 0, "reasoning": "Gemini client not initialized"}
 
         prompt = f"""
         Actúa como un experto consultor técnico freelance. 
-        Analiza detalladamente esta oferta de trabajo para determinar si vale la pena aplicar:
+        Analiza detalladamente esta oferta de trabajo para determinar si vale la pena aplicar (Aprobar) o no (Rechazar):
         
         Título: {job.title}
         Descripción: {job.description}
@@ -37,6 +38,7 @@ class GeminiAdapter(AIServicePort):
         Devuelve estrictamente un objeto JSON con esta estructura:
         {{
             "score": (entero del 0 al 100),
+            "decision": ("approved" si la oportunidad es buena, "rejected" si no lo es),
             "viability": "un párrafo corto explicando por qué es o no una buena oportunidad",
             "key_risks": ["riesgo 1", "riesgo 2"],
             "recommended_stack": ["tecnología 1", "tecnología 2"],
@@ -44,11 +46,14 @@ class GeminiAdapter(AIServicePort):
             "suggested_bid": (monto numérico sugerido para ofertar basado en el presupuesto y complejidad)
         }}
         """
-        
+
         try:
-            response = self.model.generate_content(
-                prompt, 
-                generation_config={"response_mime_type": "application/json"}
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
             )
             analysis_res = json.loads(response.text)
             logging.info(f"Gemini Analysis Output: {analysis_res}")
@@ -59,7 +64,7 @@ class GeminiAdapter(AIServicePort):
 
     def generate_proposal_content(self, job: JobOffer) -> str:
         """Genera el texto de la propuesta (bid) para Freelancer.com."""
-        if not self.model:
+        if not self.client:
             return "Hola, estoy interesado en tu proyecto y tengo la experiencia necesaria para ayudarte."
 
         prompt = f"""
@@ -75,7 +80,10 @@ class GeminiAdapter(AIServicePort):
         """
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             return response.text.strip()
         except Exception as e:
             logging.error(f"Error generando propuesta: {e}")
@@ -83,7 +91,7 @@ class GeminiAdapter(AIServicePort):
 
     def suggest_reply(self, message: ClientMessage) -> str:
         """Sugiere una respuesta para el chat con el cliente."""
-        if not self.model:
+        if not self.client:
             return "Gracias por tu mensaje. Lo revisaré pronto."
 
         prompt = f"""
@@ -97,7 +105,10 @@ class GeminiAdapter(AIServicePort):
         """
 
         try:
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt
+            )
             return response.text.strip()
         except Exception as e:
             logging.error(f"Error sugiriendo respuesta: {e}")

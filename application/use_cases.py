@@ -32,7 +32,9 @@ class ScanAndAnalyzeJobsUseCase:
             
             logging.info(f"Se encontraron {len(jobs)} ofertas en plataforma.")
         except Exception as e:
-            logging.error(f"Error buscando trabajos en plataforma: {e}")
+            error_msg = f"Error buscando trabajos en plataforma: {e}"
+            logging.error(error_msg)
+            self.notification_port.notify_error(error_msg)
             return
 
         # Importar generador de reportes
@@ -58,20 +60,21 @@ class ScanAndAnalyzeJobsUseCase:
                 
                 # Fallback si el score es 0 pero hay razonamiento (posible error de parsing JSON en IA)
                 if score == 0 and "reasoning" in analysis:
-                    logging.warning(f"IA devolvió score 0 o error: {analysis.get('reasoning')}")
+                    warn_msg = f"⚠️ IA devolvió score 0 o error para {job.external_id}: {analysis.get('reasoning')}"
+                    logging.warning(warn_msg)
+                    self.notification_port.notify_warning(warn_msg)
                     # En este punto, no saltamos el guardado para que el usuario vea el error
                 
                 logging.info(f"Análisis completado para {job.external_id}: Score {score}")
 
-                # 2. Filtro de "Aprobación" (Solo si supera el min_score o si es un error de IA permitimos pasar para debugging)
-                if score < min_score and score != 0:
-                    logging.info(f"Oferta {job.external_id} rechazada por bajo score ({score} < {min_score})")
-                    continue
-
-                # 3. Guardar solo si aprobó el filtro
+                # 2. Guardar y Notificar
                 job.analysis = analysis
                 saved_job = self.job_repo.save(job)
-                logging.info(f"Oferta {job.external_id} guardada con su análisis.")
+                
+                # 3. Respuesta visual según decisión
+                decision = analysis.get('decision', 'approved')
+                if decision == 'rejected':
+                    logging.info(f"Oferta {job.external_id} marcada como RECHAZADA por IA.")
                 
                 # 4. Generar reporte markdown
                 try:
@@ -80,11 +83,13 @@ class ScanAndAnalyzeJobsUseCase:
                 except Exception as report_err:
                     logging.error(f"Error generando reporte markdown: {report_err}")
                 
-                # 5. Notificar oportunidad a Telegram
+                # 5. Notificar oportunidad a Telegram (Siempre enviamos para que el usuario vea la decisión de la IA)
                 self.notification_port.notify_opportunity(saved_job, analysis)
                     
             except Exception as e:
-                logging.error(f"Error procesando oferta {job.external_id}: {e}")
+                error_msg = f"Error procesando oferta {job.external_id}: {e}"
+                logging.error(error_msg)
+                self.notification_port.notify_error(error_msg)
 
 class GenerateProposalUseCase:
     def __init__(
@@ -106,7 +111,9 @@ class GenerateProposalUseCase:
             try:
                 job = self.job_repo.get_by_external_id(job_external_id)
             except Exception as e:
-                logging.warning(f"Error accediendo a DB para obtener job: {e}. No se puede proceder sin job.")
+                warn_msg = f"⚠️ Error accediendo a DB para obtener job {job_external_id}: {e}. No se puede proceder."
+                logging.warning(warn_msg)
+                self.notification_port.notify_warning(warn_msg)
                 return None
 
             if not job:
@@ -143,7 +150,9 @@ class GenerateProposalUseCase:
             except Exception as e:
                 import time
                 saved_proposal.id = int(time.time())
-                logging.warning(f"No se pudo guardar la propuesta en DB: {e}. Usando ID temporal {saved_proposal.id}")
+                warn_msg = f"⚠️ No se pudo guardar la propuesta en DB: {e}. Usando ID temporal {saved_proposal.id}"
+                logging.warning(warn_msg)
+                self.notification_port.notify_warning(warn_msg)
             
             # Enviar a Telegram para validación
             self.notification_port.send_proposal_for_validation(
@@ -159,7 +168,9 @@ class GenerateProposalUseCase:
             return saved_proposal
 
         except Exception as e:
-            logging.error(f"Error crítico generando propuesta para {job_external_id}: {e}")
+            error_msg = f"Error crítico generando propuesta para {job_external_id}: {e}"
+            logging.error(error_msg)
+            self.notification_port.notify_error(error_msg)
             return None
 
 class SubmitProposalUseCase:
@@ -220,7 +231,9 @@ class SubmitProposalUseCase:
             
             return success
         except Exception as e:
-            logging.error(f"Error en SubmitProposalUseCase: {e}")
+            error_msg = f"Error en SubmitProposalUseCase: {e}"
+            logging.error(error_msg)
+            self.notification_port.notify_error(error_msg)
             return False
 
 class UpdateProposalUseCase:
