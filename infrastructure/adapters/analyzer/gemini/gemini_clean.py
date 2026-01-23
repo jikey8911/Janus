@@ -17,7 +17,7 @@ class GeminiAdapter(AIServicePort):
             try:
                 # Usamos el nuevo SDK google-genai
                 self.client = genai.Client(api_key=self.api_key)
-                self.model_name = 'gemini-1.5-pro'
+                self.model_name = os.getenv("GEMINI_MODEL_NAME", "gemini-2.5-pro")
             except Exception as e:
                 logging.error(f"Error configurando Gemini: {e}")
                 self.client = None
