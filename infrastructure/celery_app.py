@@ -57,6 +57,7 @@ celery_app.conf.beat_schedule = {
     "scan-jobs-every-10-minutes": {
         "task": "scan_jobs_task",
         "schedule": 600.0,  # 10 minutos
+        "args": ('("PHP" OR "Java" OR "JavaScript" OR "Python" OR ".NET" OR "Website Design" OR "C# Programming" OR "HTML5" OR "HTML" OR "Node.js" OR "React.js" OR "Vue.js" OR "ES8 Javascript" OR "React Native" OR "Vue.js Framework" OR "React.js Framework" OR "Prompt Engineering" OR "AI Design" OR "AI Development")', 15),
     },
     "quick-scan-every-5-minutes": {
         "task": "periodic_quick_scan_task",

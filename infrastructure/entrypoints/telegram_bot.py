@@ -145,6 +145,20 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
+async def listar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Handle /listar
+    Muestra menú para listar oportunidades aprobadas o asignadas.
+    """
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Aprobadas (>60)", callback_data='list_approved'),
+            InlineKeyboardButton("📂 Asignadas / Propuestas", callback_data='list_assigned')
+        ]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("📂 **Selecciona una lista para ver:**", reply_markup=reply_markup, parse_mode="Markdown")
+
 async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handle callback queries from inline keyboard buttons.
@@ -180,6 +194,11 @@ async def callback_query_handler(update: Update, context: ContextTypes.DEFAULT_T
         if item_id.startswith("job_"):
             job_id = item_id.replace("job_", "")
             await handle_discard_job(query, job_id)
+    elif action == "list":
+        if item_id == "approved":
+            await handle_list_approved(query)
+        elif item_id == "assigned":
+            await handle_list_assigned(query)
     else:
         await query.edit_message_text(text=f"❌ Acción desconocida: {action}")
 
@@ -359,6 +378,46 @@ async def handle_discard_job(query, job_id: str):
     except Exception as e:
         await query.bot.send_message(chat_id=query.effective_chat.id, text=f"❌ Error descartando: {e}")
 
+async def handle_list_approved(query):
+    """Lista trabajos con score > 60."""
+    try:
+        from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
+        repo = MongoJobRepository()
+        jobs = repo.get_by_min_score(60, limit=10)
+        
+        if not jobs:
+            await query.edit_message_text("📭 No hay oportunidades aprobadas recientes.")
+            return
+
+        text = "✅ **Últimas Oportunidades Aprobadas (>60):**\n\n"
+        for job in jobs:
+            score = job.analysis.get('score', 0) if job.analysis else 0
+            text += f"🔹 **{job.title}** (Score: {score})\n   ID: `{job.external_id}`\n\n"
+        
+        await query.edit_message_text(text, parse_mode="Markdown")
+    except Exception as e:
+        await query.edit_message_text(f"❌ Error listando aprobadas: {e}")
+
+async def handle_list_assigned(query):
+    """Lista propuestas generadas/asignadas."""
+    try:
+        from infrastructure.adapters.persistence.mongodb.adapter import MongoProposalRepository
+        repo = MongoProposalRepository()
+        proposals = repo.get_all(limit=10)
+        
+        if not proposals:
+            await query.edit_message_text("📭 No hay propuestas generadas recientes.")
+            return
+
+        text = "📂 **Últimas Propuestas / Asignaciones:**\n\n"
+        for p in proposals:
+            status_emoji = "✅" if p.status == "submitted" else "📝" if p.status == "draft" else "🚫"
+            text += f"{status_emoji} **ID Propuesta:** `{p.id}`\n   Trabajo: `{p.job_offer_id}`\n   Estado: {p.status}\n\n"
+        
+        await query.edit_message_text(text, parse_mode="Markdown")
+    except Exception as e:
+        await query.edit_message_text(f"❌ Error listando asignadas: {e}")
+
 if __name__ == '__main__':
     TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     if not TOKEN:
@@ -382,8 +441,11 @@ if __name__ == '__main__':
     application.add_handler(generate_handler)
     application.add_handler(edit_h)
     application.add_handler(CommandHandler('buscar', buscar_command))
+    application.add_handler(CommandHandler('listar', listar_command)) # Nuevo handler
     application.add_handler(callback_handler)
     
+    # Set Menu Commands (Post-init, but we need running loop or just configure on start)
+    # Simple way: just run it
     logging.info("Starting Telegram Bot Polling...")
     application.run_polling()
 

@@ -30,6 +30,15 @@ class MongoJobRepository(JobRepository):
             return JobOffer(**data)
         return None
 
+    def get_by_min_score(self, min_score: int, limit: int = 10) -> list[JobOffer]:
+        """Obtiene trabajos con un score mínimo en su análisis."""
+        cursor = self.collection.find({"analysis.score": {"$gte": min_score}}).sort("analysis.score", -1).limit(limit)
+        jobs = []
+        for doc in cursor:
+            data = {k: v for k, v in doc.items() if k != "_id"}
+            jobs.append(JobOffer(**data))
+        return jobs
+
 class MongoProposalRepository(ProposalRepository):
     def __init__(self, connection_string: str = None, db_name: str = "janus_db"):
         if connection_string is None:
@@ -55,6 +64,15 @@ class MongoProposalRepository(ProposalRepository):
             data = {k: v for k, v in doc.items() if k != "_id"}
             return Proposal(**data)
         return None
+
+    def get_all(self, limit: int = 10) -> list[Proposal]:
+        """Obtiene las últimas propuestas."""
+        cursor = self.collection.find().sort("_id", -1).limit(limit)
+        proposals = []
+        for doc in cursor:
+            data = {k: v for k, v in doc.items() if k != "_id"}
+            proposals.append(Proposal(**data))
+        return proposals
 
 class MongoEventCheckpointRepository(EventCheckpointRepository):
     def __init__(self, db_url: str = None, db_name: str = "janus_db"):
