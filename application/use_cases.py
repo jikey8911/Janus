@@ -19,17 +19,24 @@ class ScanAndAnalyzeJobsUseCase:
         self.notification_port = notification_port
         self.proposal_repo = proposal_repo
 
-    def execute(self, query: str = "(python OR automation OR ai)", limit: int = 10, min_score: int = 0):
-        logging.info(f"Iniciando búsqueda de trabajos con query: '{query}', limit: {limit}, min_score: {min_score}")
+    def execute(self, query: str = "", limit: int = 20, min_score: int = 0):
+        # Default Query Strategy: 
+        # Si no se provee query explícita, usar un set robusto de skills técnicas
+        # para asegurar que la API de Freelancer retorne items relevantes.
+        effective_query = query
+        if not effective_query:
+            effective_query = "(python OR automation OR ai OR bot OR scraping OR react OR node OR typescript OR javascript OR web development)"
+            
+        logging.info(f"Iniciando búsqueda de trabajos con query: '{effective_query}', limit: {limit}, min_score: {min_score}")
         try:
             # Pasar el límite al adaptador si lo soporta (Freelancer lo hace ahora)
             if hasattr(self.platform_port, 'search_jobs'):
                 import inspect
                 sig = inspect.signature(self.platform_port.search_jobs)
                 if 'limit' in sig.parameters:
-                    jobs = self.platform_port.search_jobs(query, limit=limit)
+                    jobs = self.platform_port.search_jobs(effective_query, limit=limit)
                 else:
-                    jobs = self.platform_port.search_jobs(query)[:limit]
+                    jobs = self.platform_port.search_jobs(effective_query)[:limit]
             else:
                 jobs = []
             

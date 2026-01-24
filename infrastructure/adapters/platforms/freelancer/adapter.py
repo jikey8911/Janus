@@ -110,7 +110,7 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             logging.error(f"Error en get_my_skill_ids: {e}")
             return []
 
-    def search_jobs(self, query: str = "", limit: int = 10) -> List[JobOffer]:
+    def search_jobs(self, query: str = "", limit: int = 30) -> List[JobOffer]:
         """
         Busca trabajos en Freelancer.com
         Si query está vacío, retorna los últimos trabajos (por defecto 10).
@@ -128,7 +128,7 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             "sort_field": "time_submitted",
             "compact": "true",
             "full_description": "true",
-            "project_upgrades[]": ["urgent"], # Eliminado featured
+            "project_upgrades[]": [], # Eliminado featured y urgent
             "min_avg_price": 10,
             "max_avg_price": 24000 # Filtro de raíz para presupuesto
         }
@@ -138,7 +138,7 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             params["query"] = query
         
         try:
-            logging.info(f"Buscando trabajos en Freelancer (query: '{query or 'últimos 10'}')")
+            logging.info(f"Buscando trabajos en Freelancer (query: '{query or 'últimos 30'}')")
             response = self.session.get(url, params=params, timeout=15)
             
             # Log detallado para debugging
@@ -257,14 +257,18 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             return False
 
         url = f"{self.base_url}/projects/0.1/bids/"
-        payload = {
-            "project_id": int(job_id),
-            "bidder_id": int(self.user_id),
-            "amount": current_amount,
-            "period": 7,
-            "milestone_percentage": 100,
-            "description": content
-        }
+        try:
+            payload = {
+                "project_id": int(job_id),
+                "bidder_id": int(self.user_id),
+                "amount": current_amount,
+                "period": 7,
+                "milestone_percentage": 100,
+                "description": content
+            }
+        except ValueError as e:
+            logging.error(f"Error de conversión de tipos para envío (ID debe ser int): {e}")
+            return False
         
         try:
             response = self.session.post(url, json=payload, timeout=15)

@@ -35,6 +35,11 @@ def run_services():
     processes.append(beat_process)
     
     print("\n✅ All services started. Press Ctrl+C to stop.")
+
+    # 4. Trigger Initial Job Scan (Direct Mode)
+    print("🚀 Triggering initial job scan (Direct Mode)...")
+    # time.sleep(5) # No wait needed for direct execution
+    subprocess.Popen([sys.executable, "infrastructure/trigger_initial_task.py"], env=env)
     
     try:
         while True:

@@ -127,7 +127,7 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Handle /buscar
     Triggers the Celery task to scan the latest 15 jobs.
     """
-    await context.bot.send_message(chat_id=update.effective_chat.id, text="🔍 Iniciando búsqueda masiva de los últimos 15 trabajos...")
+    await context.bot.send_message(chat_id=update.effective_chat.id, text="🔍 Iniciando búsqueda masiva de los últimos 30 trabajos...")
     
     from infrastructure.entrypoints.celery_tasks import scan_jobs_task
     
@@ -135,7 +135,7 @@ async def buscar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # scan_jobs_task.delay(limit=15) # En producción usar .delay()
     # Para el usuario y ver logs inmediatos, la ejecutamos aquí
     try:
-        scan_jobs_task(limit=15)
+        scan_jobs_task(limit=30)
         await context.bot.send_message(chat_id=update.effective_chat.id, text="✅ Escaneo masivo completado. Revisa las nuevas notificaciones.")
     except Exception as e:
         error_msg = f"❌ Error en búsqueda masiva: {e}"

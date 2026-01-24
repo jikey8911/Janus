@@ -57,17 +57,14 @@ class TelegramAdapter(NotificationPort):
         score_text = f"{score_emoji} Score: {analysis_score}/100\n" if analysis_score else ""
         bid_text = f"💰 **Monto Sugerido:** {bid_amount} {currency}\n" if bid_amount else ""
         
-        message = f"""📝 **PROPUESTA GENERADA**
+        message = f"""📝 **PROPUESTA PARA ENVIAR**
  
- **Trabajo:** {job_title}
- **ID:** `{job_id}`
+ **Trabajo:** {job_title} ({job_id})
  {score_text}{bid_text}
- ---
-
+ 👇 **Mensaje para el Cliente:**
+ ```text
 {proposal_content}
-
----
-👇 **Selecciona una acción:**
+ ```
 """
         
         # Crear inline keyboard
