@@ -101,7 +101,10 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             "project_types[]": "fixed",
             "limit": limit,
             "sort_field": "time_submitted",
-            "compact": "true"
+            "compact": "true",
+            "full_description": "true",
+            "project_upgrades[]": ["featured", "urgent"],
+            "min_avg_price": 10
         }
         
         # Añadir query solo si se proporciona
@@ -127,6 +130,42 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             # Mapear a JobOffer
             jobs = []
             for p in projects:
+                # 1. Filtro estricto: ¿Es solo para premiun?
+                if p.get('is_premium_only') is True:
+                     logging.info(f"🚫 Proyecto {p.get('id')} saltado: Es exclusivo para Premium.")
+                     continue
+                
+                # 1.1 Filtro específico: RESTRICTED_FROM_BIDDING_PREMIUM_VERIFIED (User Request)
+                # Verificamos si alguna cualificación bloqueante está presente
+                qualifications = p.get('qualifications', [])
+                # A veces es lista de dicts, a veces strings. Manejamos ambos.
+                has_restriction = False
+                for q in qualifications:
+                    q_id = q.get('id') if isinstance(q, dict) else q
+                    q_name = q.get('name') if isinstance(q, dict) else str(q)
+                    
+                    if "PREMIUM_VERIFIED" in str(q_name).upper() or "PREMIUM_VERIFIED" in str(q_id).upper():
+                        has_restriction = True
+                        break
+                
+                if has_restriction:
+                     logging.info(f"🚫 Proyecto {p.get('id')} saltado: Requiere PREMIUM_VERIFIED.")
+                     continue
+
+                # 2. Filtro de reputación: ¿Pide estrellas mínimas?
+                # bid_stats puede no venir, usamos safe get
+                bid_stats = p.get('bid_stats', {}) or {}
+                nro_reviews_requeridas = bid_stats.get('min_reviews', 0)
+                if nro_reviews_requeridas > 0:
+                     logging.info(f"🚫 Proyecto {p.get('id')} saltado: Requiere {nro_reviews_requeridas} estrellas.")
+                     continue
+                
+                # 3. Filtro de Upgrades (Sealed)
+                upgrades = p.get('upgrades', {}) or {}
+                if upgrades.get('sealed') is True:
+                     logging.info(f"🚫 Proyecto {p.get('id')} saltado: Es 'Sealed' (Oculto).")
+                     continue
+
                 try:
                     budget_data = p.get('budget', {})
                     currency_data = p.get('currency', {})

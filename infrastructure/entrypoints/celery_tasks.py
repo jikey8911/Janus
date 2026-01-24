@@ -1,11 +1,12 @@
 from celery import shared_task
 import logging
+import os
 import asyncio
 
 # Adaptadores
 from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
 from infrastructure.adapters.platforms.upwork.adapter import UpworkAdapter
-from infrastructure.adapters.analyzer.groq.adapter import GroqAdapter
+from infrastructure.factories import AIFactory
 from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
 from infrastructure.adapters.persistence.mongodb.adapter import MongoProposalRepository, MongoJobRepository, MongoEventCheckpointRepository
 from domain.entities import JobOffer
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 try:
     freelancer_adapter = FreelancerAdapter()
     upwork_adapter = UpworkAdapter() # Se mantiene para compatibilidad de infraestructura
-    ai_adapter = GroqAdapter()
+    ai_adapter = AIFactory.get_adapter(os.getenv("AI_PROVIDER", "groq"))
     telegram_adapter = TelegramAdapter()
 except Exception as e:
     logger.error(f"Error inicializando adaptadores en worker: {e}")
@@ -30,14 +31,14 @@ def scan_jobs_task(query: str = "", limit: int = 10):
     try:
         # Importar adaptadores y casos de uso
         from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
-        from infrastructure.adapters.analyzer.groq.adapter import GroqAdapter
+        from infrastructure.factories import AIFactory
         from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
         from application.use_cases import ScanAndAnalyzeJobsUseCase
         
         # Instanciar adaptadores
         platform_adapter = FreelancerAdapter()
-        ai_adapter = GroqAdapter()
+        ai_adapter = AIFactory.get_adapter(os.getenv("AI_PROVIDER", "groq"))
         notification_adapter = TelegramAdapter()
         job_repo = MongoJobRepository()
         proposal_repo = MongoProposalRepository()
@@ -74,7 +75,7 @@ def periodic_quick_scan_task():
     logger.info("🕒 Ejecutando Escaneo Rápido Periódico (1 Job, Score > 80)...")
     try:
         from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
-        from infrastructure.adapters.analyzer.groq.adapter import GroqAdapter
+        from infrastructure.factories import AIFactory
         from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository
         from application.use_cases import ScanAndAnalyzeJobsUseCase
@@ -82,7 +83,7 @@ def periodic_quick_scan_task():
         use_case = ScanAndAnalyzeJobsUseCase(
             platform_port=FreelancerAdapter(),
             job_repo=MongoJobRepository(),
-            ai_port=GroqAdapter(),
+            ai_port=AIFactory.get_adapter(os.getenv("AI_PROVIDER", "groq")),
             notification_port=TelegramAdapter(),
             proposal_repo=MongoProposalRepository()
         )

@@ -10,6 +10,7 @@ load_dotenv() # Load variables from .env
 try:
     from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
     from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+    from telegram.error import Conflict
 except ImportError:
     logging.error("python-telegram-bot not installed. Please install it with 'pip install python-telegram-bot'")
     exit(1)
@@ -23,7 +24,7 @@ from application.use_cases import (
 )
 from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository, MongoProposalRepository
 from infrastructure.adapters.platforms.freelancer.adapter import FreelancerAdapter
-from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
+from infrastructure.factories import AIFactory
 from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
 from infrastructure.factories import PlatformFactory
 
@@ -99,14 +100,14 @@ async def generate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository, MongoProposalRepository
-        from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
+        from infrastructure.factories import AIFactory
         from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         from application.use_cases import GenerateProposalUseCase
         
         use_case = GenerateProposalUseCase(
             job_repo=MongoJobRepository(),
             proposal_repo=MongoProposalRepository(),
-            ai_port=GeminiAdapter(),
+            ai_port=AIFactory.get_adapter(os.getenv("AI_PROVIDER", "groq")),
             notification_port=TelegramAdapter()
         )
         
@@ -349,13 +350,13 @@ async def handle_force_generate(query, job_id: str):
     try:
         from application.use_cases import GenerateProposalUseCase
         from infrastructure.adapters.persistence.mongodb.adapter import MongoJobRepository, MongoProposalRepository
-        from infrastructure.adapters.analyzer.gemini.gemini_clean import GeminiAdapter
+        from infrastructure.factories import AIFactory
         from infrastructure.adapters.notification.telegram.adapter import TelegramAdapter
         
         use_case = GenerateProposalUseCase(
             job_repo=MongoJobRepository(),
             proposal_repo=MongoProposalRepository(),
-            ai_port=GeminiAdapter(),
+            ai_port=AIFactory.get_adapter(os.getenv("AI_PROVIDER", "groq")),
             notification_port=TelegramAdapter()
         )
         
@@ -418,6 +419,14 @@ async def handle_list_assigned(query):
     except Exception as e:
         await query.edit_message_text(f"❌ Error listando asignadas: {e}")
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error and handle specific cases."""
+    logging.error(f"Exception while handling an update: {context.error}")
+    
+    if isinstance(context.error, Conflict):
+        logging.critical("🛑 Conflict detected: Another bot instance is running. Shutting down this instance.")
+        os._exit(1) # Force exit to kill zombie
+
 if __name__ == '__main__':
     TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     if not TOKEN:
@@ -443,6 +452,7 @@ if __name__ == '__main__':
     application.add_handler(CommandHandler('buscar', buscar_command))
     application.add_handler(CommandHandler('listar', listar_command)) # Nuevo handler
     application.add_handler(callback_handler)
+    application.add_error_handler(error_handler)
     
     # Set Menu Commands (Post-init, but we need running loop or just configure on start)
     # Simple way: just run it
