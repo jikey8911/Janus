@@ -4,6 +4,7 @@ from celery import Celery
 # Configuración por defecto si no existen variables de entorno
 # Configuración por defecto si no existen variables de entorno
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+MONGO_BACKEND = os.getenv("MONGO_BACKEND", "mongodb://localhost:27017/janus_celery")
 
 # Fallback mechanism: If Redis URL is default localhost and likely not running, use filesystem
 # This is a dev-only convenience for the user
@@ -40,7 +41,7 @@ else:
     celery_app = Celery(
         "janus_tasks",
         broker=REDIS_URL,
-        backend=REDIS_URL,
+        backend=MONGO_BACKEND,
         include=["infrastructure.entrypoints.celery_tasks"]
     )
 

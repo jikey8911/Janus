@@ -88,11 +88,36 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
 
     # ========== FreelancePlatformPort Implementation ==========
 
+    def get_my_skill_ids(self) -> List[int]:
+        """Obtiene la lista de IDs de habilidades del perfil autenticado."""
+        try:
+            # El ID '0.1/self' devuelve tu propia información
+            url = f"{self.base_url}/users/0.1/self/"
+            params = {"jobs": "true"} # Solicitamos que incluya los jobs (skills)
+            
+            response = self.session.get(url, params=params, timeout=10)
+            if response.ok:
+                data = response.json()
+                # Extraemos solo los IDs de la lista de 'jobs'
+                skills = data.get('result', {}).get('jobs', [])
+                skill_ids = [s.get('id') for s in skills]
+                logging.info(f"Habilidades detectadas en tu perfil: {len(skill_ids)}")
+                return skill_ids
+            else:
+                logging.error(f"Error obteniendo habilidades: {response.status_code}")
+                return []
+        except Exception as e:
+            logging.error(f"Error en get_my_skill_ids: {e}")
+            return []
+
     def search_jobs(self, query: str = "", limit: int = 10) -> List[JobOffer]:
         """
         Busca trabajos en Freelancer.com
         Si query está vacío, retorna los últimos trabajos (por defecto 10).
         """
+        # 1. Obtener tus habilidades actuales
+        my_skills = self.get_my_skill_ids()
+
         url = f"{self.base_url}/projects/0.1/projects/active/"
         
         # Parámetros base
@@ -103,8 +128,9 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             "sort_field": "time_submitted",
             "compact": "true",
             "full_description": "true",
-            "project_upgrades[]": ["featured", "urgent"],
-            "min_avg_price": 10
+            "project_upgrades[]": ["urgent"], # Eliminado featured
+            "min_avg_price": 10,
+            "max_avg_price": 24000 # Filtro de raíz para presupuesto
         }
         
         # Añadir query solo si se proporciona
@@ -130,41 +156,58 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             # Mapear a JobOffer
             jobs = []
             for p in projects:
-                # 1. Filtro estricto: ¿Es solo para premiun?
-                if p.get('is_premium_only') is True:
-                     logging.info(f"🚫 Proyecto {p.get('id')} saltado: Es exclusivo para Premium.")
-                     continue
-                
-                # 1.1 Filtro específico: RESTRICTED_FROM_BIDDING_PREMIUM_VERIFIED (User Request)
-                # Verificamos si alguna cualificación bloqueante está presente
-                qualifications = p.get('qualifications', [])
-                # A veces es lista de dicts, a veces strings. Manejamos ambos.
-                has_restriction = False
-                for q in qualifications:
-                    q_id = q.get('id') if isinstance(q, dict) else q
-                    q_name = q.get('name') if isinstance(q, dict) else str(q)
-                    
-                    if "PREMIUM_VERIFIED" in str(q_name).upper() or "PREMIUM_VERIFIED" in str(q_id).upper():
-                        has_restriction = True
-                        break
-                
-                if has_restriction:
-                     logging.info(f"🚫 Proyecto {p.get('id')} saltado: Requiere PREMIUM_VERIFIED.")
-                     continue
+                # --- FILTROS ROBUSTOS (Blindaje contra 403 / 400) ---
 
-                # 2. Filtro de reputación: ¿Pide estrellas mínimas?
-                # bid_stats puede no venir, usamos safe get
-                bid_stats = p.get('bid_stats', {}) or {}
-                nro_reviews_requeridas = bid_stats.get('min_reviews', 0)
-                if nro_reviews_requeridas > 0:
-                     logging.info(f"🚫 Proyecto {p.get('id')} saltado: Requiere {nro_reviews_requeridas} estrellas.")
-                     continue
-                
-                # 3. Filtro de Upgrades (Sealed)
+                # --- FILTRO DE HABILIDADES REQUERIDAS ---
+                # Si el proyecto exige habilidades específicas (Error 403 anterior)
+                if p.get('is_skill_required') is True:
+                    project_jobs = p.get('jobs', [])
+                    project_job_ids = [j.get('id') for j in project_jobs]
+                    
+                    # Verificamos si tienes al menos una de las habilidades que pide el proyecto
+                    # (Freelancer suele requerir que tengas las marcadas como obligatorias)
+                    tiene_habilidad = any(s_id in my_skills for s_id in project_job_ids)
+                    
+                    if not tiene_habilidad:
+                        logging.info(f"🚫 Proyecto {p.get('id')} saltado: No tienes las habilidades obligatorias.")
+                        continue
+
+                # 1. Filtro de Presupuesto (Evita el error de Verificación > $2500)
+                budget_data = p.get('budget', {})
+                max_budget = float(budget_data.get('maximum', 0) or 0)
+                if max_budget >= 2500:
+                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Presupuesto alto (${max_budget}) requiere Verificación.")
+                    continue
+
+                # 2. Filtro Premium Estricto
+                if p.get('is_premium_only') is True:
+                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Es exclusivo para Premium.")
+                    continue
+
+                # 3. Filtro de Proyectos Destacados (Error: RESTRICTED_FROM_BIDDING_ON_FEATURED)
                 upgrades = p.get('upgrades', {}) or {}
+                if upgrades.get('featured') is True:
+                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Es 'Featured' (requiere membresía/estrellas).")
+                    continue
+                
+                # Check for Sealed as well (kept from previous valid logic)
                 if upgrades.get('sealed') is True:
                      logging.info(f"🚫 Proyecto {p.get('id')} saltado: Es 'Sealed' (Oculto).")
                      continue
+
+                # 4. Filtro de Reputación (Estrellas mínimas)
+                bid_stats = p.get('bid_stats', {}) or {}
+                nro_reviews_requeridas = bid_stats.get('min_reviews', 0)
+                if nro_reviews_requeridas > 0:
+                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Requiere {nro_reviews_requeridas} estrellas.")
+                    continue
+
+                # 5. Filtro de Cualificaciones Especiales (catch-all)
+                qualifications = p.get('qualifications', [])
+                if qualifications:
+                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Tiene cualificaciones especiales ({len(qualifications)}).")
+                    continue
+
 
                 try:
                     budget_data = p.get('budget', {})
@@ -201,16 +244,23 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             return []
 
     def submit_proposal(self, job_id: str, content: str, amount: Optional[float] = None) -> bool:
-        """Envía una propuesta a un trabajo."""
+        """Envía una propuesta a un trabajo validando restricciones de cuenta básica."""
         if not self.user_id:
             logging.error("No se puede enviar propuesta: user_id no disponible")
+            return False
+
+        # --- VALIDACIÓN DE SEGURIDAD PARA CUENTA NO-PREMIUM ---
+        # Si el monto es >= 2500, Freelancer requiere verificación de identidad (Error 403)
+        current_amount = amount or 100.0
+        if current_amount >= 2500:
+            logging.warning(f"⚠️ Bloqueo preventivo: No se puede ofertar ${current_amount} sin cuenta verificada.")
             return False
 
         url = f"{self.base_url}/projects/0.1/bids/"
         payload = {
             "project_id": int(job_id),
             "bidder_id": int(self.user_id),
-            "amount": amount or 100.0,
+            "amount": current_amount,
             "period": 7,
             "milestone_percentage": 100,
             "description": content
@@ -220,14 +270,22 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             response = self.session.post(url, json=payload, timeout=15)
             
             if response.status_code in [200, 201]:
-                logging.info(f"Propuesta enviada exitosamente a job {job_id}")
+                logging.info(f"✅ Propuesta enviada exitosamente a job {job_id}")
                 return True
+            
+            # Manejo específico de errores conocidos para depuración
+            error_data = response.json() if response.status_code == 403 else {}
+            error_code = error_data.get("error_code", "")
+
+            if "RESTRICTED_FROM_BIDDING" in error_code:
+                logging.error(f"❌ Bloqueo por restricciones de Freelancer (Membresía/Estrellas): {error_code}")
             else:
                 logging.error(f"Error enviando propuesta: {response.status_code} - {response.text}")
-                return False
+            
+            return False
                 
         except Exception as e:
-            logging.error(f"Error al enviar propuesta {job_id}: {e}")
+            logging.error(f"Error crítico al enviar propuesta {job_id}: {e}")
             return False
 
     # ========== PlatformEventPort Implementation ==========
