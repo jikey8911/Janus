@@ -69,15 +69,23 @@ class GeminiAdapter(AIServicePort):
             return "Hola, estoy interesado en tu proyecto y tengo la experiencia necesaria para ayudarte."
 
         prompt = f"""
-        Escribe una propuesta de bid corta, profesional y directa para este proyecto en Freelancer.com:
-        Proyecto: {job.title}
+        Actúa como un desarrollador Senior freelance altamente eficiente.
+        Tu objetivo es ganar este proyecto en Freelancer.com escribiendo una propuesta irresistible y técnica.
+
+        DETALLES DEL PROYECTO:
+        Título: {job.title}
         Descripción: {job.description}
 
-        Requisitos de la propuesta:
-        1. NO uses saludos genéricos como 'Dear Hiring Manager'. 
-        2. Ve directo al grano sobre cómo resolverás el problema técnico.
-        3. Mantén el idioma original de la oferta (si es inglés, escribe en inglés).
-        4. Máximo 400 caracteres.
+        INSTRUCCIONES DE REDACCIÓN:
+        1. ANÁLISIS TÉCNICO: Identifica las tecnologías clave mencionadas (o implícitas) en la descripción y MENCIONALAS explícitamente en tu propuesta para demostrar que leíste los requisitos.
+        2. SOLUCIÓN DIRECTA: No saludes genéricamente. Empieza diciendo CÓMO vas a resolver su problema específico.
+        3. AUTORIDAD: Menciona brevemente experiencia relevante con esas tecnologías específicas.
+        4. CALL TO ACTION: Termina invitando a conversar para definir detalles o mostrar demos previos.
+        5. IDIOMA: Escribe estrictamente en el mismo idioma de la descripción del proyecto (Inglés o Español).
+        6. LONGITUD: Manténlo conciso (max 1000 caracteres), profesional y sin relleno.
+        
+        EJEMPLO DE ESTRUCTURA (Adáptalo al idioma):
+        "Hola, puedo construir tu [sistema] usando [tecnología A] y [tecnología B]. He desarrollado proyectos similares como... Mi enfoque sería..."
         """
 
         try:

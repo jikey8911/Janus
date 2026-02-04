@@ -25,7 +25,22 @@ class ScanAndAnalyzeJobsUseCase:
         # para asegurar que la API de Freelancer retorne items relevantes.
         effective_query = query
         if not effective_query:
-            effective_query = "(python OR automation OR ai OR bot OR scraping OR react OR node OR typescript OR javascript OR web development)"
+            # 1. Intentar obtener skills reales de la cuenta si el puerto lo soporta
+            try:
+                if hasattr(self.platform_port, 'get_my_skill_names'):
+                    my_skills = self.platform_port.get_my_skill_names()
+                    if my_skills:
+                        # Unir con OR: "(Python OR Java OR ...)"
+                        # Limitamos a los primeros 20 para no romper la URL
+                        joined_skills = " OR ".join([f'"{s}"' for s in my_skills[:20]])
+                        effective_query = f"({joined_skills})"
+                        logging.info(f"Usando query dinámica basada en skills de cuenta: {effective_query}")
+            except Exception as e:
+                logging.warning(f"No se pudieron obtener skills dinámicos: {e}")
+
+            # 2. Fallback si falló lo anterior o estaba vacío
+            if not effective_query:
+                effective_query = "(python OR automation OR ai OR bot OR scraping OR react OR node OR typescript OR javascript OR web development)"
             
         logging.info(f"Iniciando búsqueda de trabajos con query: '{effective_query}', limit: {limit}, min_score: {min_score}")
         try:

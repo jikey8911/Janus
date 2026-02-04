@@ -110,6 +110,26 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             logging.error(f"Error en get_my_skill_ids: {e}")
             return []
 
+    def get_my_skill_names(self) -> List[str]:
+        """Obtiene la lista de NOMBRES de habilidades del perfil autenticado."""
+        try:
+            url = f"{self.base_url}/users/0.1/self/"
+            params = {"jobs": "true"}
+            
+            response = self.session.get(url, params=params, timeout=10)
+            if response.ok:
+                data = response.json()
+                skills = data.get('result', {}).get('jobs', [])
+                # Extraer nombres
+                skill_names = [s.get('name') for s in skills if s.get('name')]
+                logging.info(f"Nombres de habilidades detectadas: {skill_names[:5]}... (Total: {len(skill_names)})")
+                return skill_names
+            else:
+                return []
+        except Exception as e:
+            logging.error(f"Error en get_my_skill_names: {e}")
+            return []
+
     def search_jobs(self, query: str = "", limit: int = 30) -> List[JobOffer]:
         """
         Busca trabajos en Freelancer.com
@@ -123,14 +143,14 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
         # Parámetros base
         params = {
             "job_details": "true",
-            "project_types[]": "fixed",
+            # "project_types[]": "fixed", # Eliminado para permitir hourly también
             "limit": limit,
             "sort_field": "time_submitted",
             "compact": "true",
             "full_description": "true",
-            "project_upgrades[]": [], # Eliminado featured y urgent
-            "min_avg_price": 10,
-            "max_avg_price": 24000 # Filtro de raíz para presupuesto
+            # "project_upgrades[]": [], # Eliminado featured y urgent
+            # "min_avg_price": 10,  # Eliminado para admitir todos los presupuestos/monedas
+            # "max_avg_price": 24000 # Eliminado para admitir todos
         }
         
         # Añadir query solo si se proporciona
@@ -156,57 +176,25 @@ class FreelancerAdapter(FreelancePlatformPort, PlatformEventPort):
             # Mapear a JobOffer
             jobs = []
             for p in projects:
-                # --- FILTROS ROBUSTOS (Blindaje contra 403 / 400) ---
-
-                # --- FILTRO DE HABILIDADES REQUERIDAS ---
-                # Si el proyecto exige habilidades específicas (Error 403 anterior)
-                if p.get('is_skill_required') is True:
-                    project_jobs = p.get('jobs', [])
-                    project_job_ids = [j.get('id') for j in project_jobs]
-                    
-                    # Verificamos si tienes al menos una de las habilidades que pide el proyecto
-                    # (Freelancer suele requerir que tengas las marcadas como obligatorias)
-                    tiene_habilidad = any(s_id in my_skills for s_id in project_job_ids)
-                    
-                    if not tiene_habilidad:
-                        logging.info(f"🚫 Proyecto {p.get('id')} saltado: No tienes las habilidades obligatorias.")
-                        continue
-
-                # 1. Filtro de Presupuesto (Evita el error de Verificación > $2500)
-                budget_data = p.get('budget', {})
-                max_budget = float(budget_data.get('maximum', 0) or 0)
-                if max_budget >= 2500:
-                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Presupuesto alto (${max_budget}) requiere Verificación.")
-                    continue
-
-                # 2. Filtro Premium Estricto
-                if p.get('is_premium_only') is True:
-                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Es exclusivo para Premium.")
-                    continue
-
-                # 3. Filtro de Proyectos Destacados (Error: RESTRICTED_FROM_BIDDING_ON_FEATURED)
-                upgrades = p.get('upgrades', {}) or {}
-                if upgrades.get('featured') is True:
-                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Es 'Featured' (requiere membresía/estrellas).")
-                    continue
+                # --- FILTROS DESACTIVADOS PARA OBTENER TODO EL FEED ---
                 
-                # Check for Sealed as well (kept from previous valid logic)
-                if upgrades.get('sealed') is True:
-                     logging.info(f"🚫 Proyecto {p.get('id')} saltado: Es 'Sealed' (Oculto).")
-                     continue
+                # 1. Filtro de Habilidades (DESACTIVADO)
+                # if p.get('is_skill_required') is True: ...
 
-                # 4. Filtro de Reputación (Estrellas mínimas)
-                bid_stats = p.get('bid_stats', {}) or {}
-                nro_reviews_requeridas = bid_stats.get('min_reviews', 0)
-                if nro_reviews_requeridas > 0:
-                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Requiere {nro_reviews_requeridas} estrellas.")
-                    continue
+                # 2. Filtro de Presupuesto (DESACTIVADO)
+                # budget_data = p.get('budget', {}) ...
 
-                # 5. Filtro de Cualificaciones Especiales (catch-all)
-                qualifications = p.get('qualifications', [])
-                if qualifications:
-                    logging.info(f"🚫 Proyecto {p.get('id')} saltado: Tiene cualificaciones especiales ({len(qualifications)}).")
-                    continue
+                # 3. Filtro Premium (DESACTIVADO)
+                # if p.get('is_premium_only') is True: ...
+
+                # 4. Filtro Featured/Sealed (DESACTIVADO)
+                # upgrades = p.get('upgrades', {}) ...  
+                
+                # 5. Filtro Reputación (DESACTIVADO)
+                # bid_stats = p.get('bid_stats', {}) ...
+
+                # 6. Filtro Cualificaciones (DESACTIVADO)
+                # qualifications = p.get('qualifications', []) ...
 
 
                 try:
